@@ -5,6 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 
 import '../models/auction_item.dart';
 import '../models/auction_item_data.dart' as src;
+import '../repository/auction_repository.dart';
 import 'widgets/price_line_chart.dart';
 
 class AuctionItemDetailScreen extends StatefulWidget {
@@ -17,14 +18,24 @@ class AuctionItemDetailScreen extends StatefulWidget {
 
 class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
   bool _isFavorite = false;
+  bool _initializedFavorite = false; // ✅ item.isFavorite에서 한 번만 복사하기 위한 플래그
+
+  // 싱글톤 레포 인스턴스 (factory InMemoryAuctionRepository() 사용)
+  final InMemoryAuctionRepository _repo = InMemoryAuctionRepository();
 
   @override
   Widget build(BuildContext context) {
     final Map<String, dynamic> j =
         (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ??
-        {};
+            {};
 
     final item = AuctionItem.fromJson(j);
+
+    // ✅ 첫 빌드에서만 item.isFavorite 값을 내부 state로 복사
+    if (!_initializedFavorite) {
+      _isFavorite = item.isFavorite;
+      _initializedFavorite = true;
+    }
 
     // 이름으로 상세 데이터(레벨/공격/옵션/시세 등) 매칭
     final srcItem = src.kAuctionItems.cast<src.AuctionItem?>().firstWhere(
@@ -62,8 +73,12 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
                         price: item.price,
                         rarityLabel: srcItem?.rarity,
                         isFavorite: _isFavorite,
-                        onFavoriteToggle: () {
-                          setState(() => _isFavorite = !_isFavorite);
+                        onFavoriteToggle: () async {
+                          // 싱글톤 레포로 찜 토글 + 로컬 UI 상태 토글
+                          await _repo.toggleFavorite(item.id);
+                          setState(() {
+                            _isFavorite = !_isFavorite;
+                          });
                         },
                       ),
                     ),
@@ -231,7 +246,7 @@ class _PriceTab extends StatelessWidget {
                     ),
                   )
                 : PriceLineChartFirst5(
-                    points: weekPoints, // ✅ 여기서 points 전달
+                    points: weekPoints, // 여기서 points 전달
                     backgroundColor: AppColors.surface,
                   ),
           ),
@@ -376,7 +391,6 @@ class _DetailTab extends StatelessWidget {
 /// ─────────────────────────────────────────────
 /// 서브 위젯들
 /// ─────────────────────────────────────────────
-
 class _BasicInfo extends StatelessWidget {
   final String name;
   final int price;

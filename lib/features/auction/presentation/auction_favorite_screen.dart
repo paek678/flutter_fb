@@ -14,15 +14,16 @@ class AuctionFavoriteScreen extends StatefulWidget {
 }
 
 class _AuctionFavoriteScreenState extends State<AuctionFavoriteScreen> {
-  late final InMemoryAuctionRepository _repo;
+  //  싱글톤 레포 인스턴스 (factory InMemoryAuctionRepository() 사용)
+  final InMemoryAuctionRepository _repo = InMemoryAuctionRepository();
+
   List<AuctionItem> _favorites = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _repo = InMemoryAuctionRepository();
-    _loadFavorites();
+    _loadFavorites(); //  레포는 이미 필드에서 생성되어 있으니 바로 로드만
   }
 
   Future<void> _loadFavorites() async {
@@ -37,7 +38,7 @@ class _AuctionFavoriteScreenState extends State<AuctionFavoriteScreen> {
 
   Future<void> _toggleFavorite(int itemId) async {
     await _repo.toggleFavorite(itemId);
-    await _loadFavorites();
+    await _loadFavorites(); // 토글 후 다시 찜 목록 갱신
   }
 
   @override
@@ -75,24 +76,38 @@ class _AuctionFavoriteScreenState extends State<AuctionFavoriteScreen> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      // ✅ 리스트 자체도 양옆 여유 조금 더 줌
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       itemCount: _favorites.length,
       itemBuilder: (context, index) {
         final item = _favorites[index];
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: AuctionItemTile(
-            item: item,
-            isFavorite: true,
-            onFavoriteToggle: () => _toggleFavorite(item.id),
-            onTap: () {
-              Navigator.pushNamed(
-                context,
-                '/auction_item_detail',
-                arguments: item.toJson(),
-              );
-            },
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Card(
+            margin: EdgeInsets.zero,
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 0.5,
+            child: Padding(
+              // ✅ 카드 안쪽에 가로/세로 패딩 넣어서 내용이 가운데 쪽으로
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: AuctionItemTile(
+                item: item,
+                isFavorite: true,
+                onFavoriteToggle: () => _toggleFavorite(item.id),
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    '/auction_item_detail',
+                    arguments: item.toJson(),
+                  );
+                },
+              ),
+            ),
           ),
         );
       },

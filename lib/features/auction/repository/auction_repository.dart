@@ -35,13 +35,21 @@ abstract class AuctionRepository {
 }
 
 /// ─────────────────────────────────────────────────────────────────
-/// 메모리 기반 구현체 (data → 화면 모델 매핑)
+/// 메모리 기반 구현체 (data → 화면 모델 매핑) - ✅ 싱글톤 적용
 /// ─────────────────────────────────────────────────────────────────
 class InMemoryAuctionRepository implements AuctionRepository {
-  InMemoryAuctionRepository() {
+  // ✅ 1) private 생성자
+  InMemoryAuctionRepository._internal() {
     _items = _buildItemsFromData();
     _prices = _buildPricesFromItems(_items);
   }
+
+  // ✅ 2) static 인스턴스
+  static final InMemoryAuctionRepository _instance =
+      InMemoryAuctionRepository._internal();
+
+  // ✅ 3) factory 생성자: 어디서든 InMemoryAuctionRepository() 호출하면 이 인스턴스 반환
+  factory InMemoryAuctionRepository() => _instance;
 
   late final List<AuctionItem> _items;
   late final List<ItemPrice> _prices;
@@ -129,10 +137,24 @@ class InMemoryAuctionRepository implements AuctionRepository {
   @override
   Future<void> toggleFavorite(int itemId) async {
     await Future<void>.delayed(const Duration(milliseconds: 30));
-    if (_favorites.contains(itemId)) {
+
+    // 현재 찜 상태
+    final wasFavorite = _favorites.contains(itemId);
+
+    // 1) 찜 Set 갱신
+    if (wasFavorite) {
       _favorites.remove(itemId);
     } else {
       _favorites.add(itemId);
+    }
+
+    // 2) _items 리스트 안 실제 아이템의 isFavorite 값도 동기화
+    final index = _items.indexWhere((e) => e.id == itemId);
+    if (index != -1) {
+      final oldItem = _items[index];
+      _items[index] = oldItem.copyWith(
+        isFavorite: !wasFavorite, // true <-> false 토글
+      );
     }
   }
 
@@ -176,8 +198,8 @@ class InMemoryAuctionRepository implements AuctionRepository {
         data.PriceRange.d7 => 7,
         data.PriceRange.d14 => 14,
         data.PriceRange.d30 => 30,
-        data.PriceRange.d90 => 45,   // 성능 고려 샘플
-        data.PriceRange.d365 => 90,  // 성능 고려 샘플
+        data.PriceRange.d90 => 45, // 성능 고려 샘플
+        data.PriceRange.d365 => 90, // 성능 고려 샘플
       };
 
       final seed =

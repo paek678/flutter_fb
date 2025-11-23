@@ -17,7 +17,9 @@ class AuctionScreen extends StatefulWidget {
 
 class _AuctionScreenState extends State<AuctionScreen> {
   final TextEditingController _searchController = TextEditingController();
-  late final InMemoryAuctionRepository _repo;
+
+  // ✅ 싱글톤 레포지토리 인스턴스 (factory InMemoryAuctionRepository() 사용)
+  final InMemoryAuctionRepository _repo = InMemoryAuctionRepository();
 
   // 상승 / 하락 리스트
   List<AuctionPriceRow> _increaseRows = [];
@@ -31,8 +33,7 @@ class _AuctionScreenState extends State<AuctionScreen> {
   @override
   void initState() {
     super.initState();
-    _repo = InMemoryAuctionRepository();
-    _loadPriceRows();
+    _loadPriceRows(); // ✅ 레포는 이미 필드에서 생성, 여기서는 데이터만 로딩
   }
 
   @override
