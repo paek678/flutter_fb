@@ -1,6 +1,10 @@
+// lib/features/community/model/community_comment.dart
+
 class CommunityComment {
-  final int id;
-  final int postId;
+  final int id; // 기존 필드 (Firestore의 'id'와 매핑될 수 있음)
+  final String? docId; // 💡 댓글의 Firestore 문서 ID 저장을 위해 추가
+  final int postId; // 기존 필드 (Firestore의 'post_id'와 매핑될 수 있음)
+  final String? postDocId; // 💡 상위 게시물의 Firestore 문서 ID 저장을 위해 추가
   final String author;
   final String content;
   final DateTime createdAt;
@@ -8,7 +12,9 @@ class CommunityComment {
 
   CommunityComment({
     required this.id,
+    this.docId, // 추가: nullable String
     required this.postId,
+    this.postDocId, // 추가: nullable String
     required this.author,
     required this.content,
     required this.createdAt,
@@ -17,7 +23,9 @@ class CommunityComment {
 
   CommunityComment copyWith({
     int? id,
+    String? docId, // 추가
     int? postId,
+    String? postDocId, // 추가
     String? author,
     String? content,
     DateTime? createdAt,
@@ -25,7 +33,9 @@ class CommunityComment {
   }) {
     return CommunityComment(
       id: id ?? this.id,
+      docId: docId ?? this.docId, // docId 복사
       postId: postId ?? this.postId,
+      postDocId: postDocId ?? this.postDocId, // postDocId 복사
       author: author ?? this.author,
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
@@ -33,6 +43,7 @@ class CommunityComment {
     );
   }
 
+  // Firestore에서 docId, postDocId는 Map에 포함되지 않으므로 fromJson/toJson 로직에서 제외합니다.
   factory CommunityComment.fromJson(Map<String, dynamic> j) => CommunityComment(
         id: j['id'] as int,
         postId: j['postId'] as int,
