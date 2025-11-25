@@ -132,6 +132,12 @@ class _RankingScreenState extends State<RankingScreen> {
                     fame:
                         (characterMap['power'] ?? characterMap['score'] ?? '0')
                             .toString(),
+                    stats: null,
+                    detailStats: null, 
+                    equipments: [], 
+                    avatars: [], 
+                    buffItems: [], 
+                    rankingHistory: [],
                   );
 
                   Navigator.push(
