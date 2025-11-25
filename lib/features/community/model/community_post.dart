@@ -2,7 +2,8 @@
 import 'post_category.dart';
 
 class CommunityPost {
-  final int id;
+  final int id; // 기존 필드 (Firestore의 'post_no'와 매핑될 수 있음)
+  final String? docId; // 💡 Firestore 문서 ID 저장을 위해 추가 (String 타입)
   final String title;
   final String content;
   final String author;
@@ -14,6 +15,7 @@ class CommunityPost {
 
   const CommunityPost({
     required this.id,
+    this.docId, // 추가: nullable String
     required this.title,
     required this.content,
     required this.author,
@@ -26,6 +28,7 @@ class CommunityPost {
 
   CommunityPost copyWith({
     int? id,
+    String? docId, // 추가
     String? title,
     String? content,
     String? author,
@@ -37,6 +40,7 @@ class CommunityPost {
   }) {
     return CommunityPost(
       id: id ?? this.id,
+      docId: docId ?? this.docId, // docId 복사
       title: title ?? this.title,
       content: content ?? this.content,
       author: author ?? this.author,
@@ -48,7 +52,9 @@ class CommunityPost {
     );
   }
 
+  // Firestore에서 docId는 Map에 포함되지 않으므로 fromJson/toJson 로직에서 제외합니다.
   factory CommunityPost.fromJson(Map<String, dynamic> json) {
+    // 참고: json에는 docId가 포함되지 않으며, 매퍼에서 별도로 주입됩니다.
     return CommunityPost(
       id: json['id'] as int,
       title: json['title'] as String,

@@ -8,11 +8,10 @@ import '../model/community_comment.dart';
 // 공통 테마
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-// PrimaryButton (경로는 프로젝트 구조에 맞게 조정)
 
 class CommunityDetailScreen extends StatefulWidget {
   final CommunityPost post;
-  final InMemoryCommunityRepository repo;
+  final CommunityRepository repo;
 
   const CommunityDetailScreen({
     super.key,
@@ -21,7 +20,8 @@ class CommunityDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<CommunityDetailScreen> createState() => _CommunityDetailScreenState();
+  // ignore: library_private_types_in_public_api
+  _CommunityDetailScreenState createState() => _CommunityDetailScreenState();
 }
 
 class _CommunityDetailScreenState extends State<CommunityDetailScreen>
@@ -33,9 +33,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   bool _loading = true;
   bool _commentsCollapsed = false;
   bool _viewCounted = false;
-
-  bool _postLiked = false;
-  int _postLikes = 0; // 제목 메타에 붙는 좋아요 수 (로컬)
 
   @override
   void initState() {
@@ -51,19 +48,26 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   Future<void> _load({bool initial = false}) async {
+    final docId = _post.docId;
+    if (docId == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
     setState(() => _loading = true);
 
-    // 최초 진입 시 조회수 +1
+    // 1. 최초 진입 시 조회수 +1
     if (initial && !_viewCounted) {
-      final v = await widget.repo.incrementViews(_post.id);
+      final v = await widget.repo.incrementViews(docId);
       if (mounted && v != null) {
         _post = v;
         _viewCounted = true;
       }
     }
 
-    final loaded = await widget.repo.getPostById(_post.id);
-    final cmts = await widget.repo.fetchComments(_post.id);
+    // 2. 게시글 및 댓글 로드
+    final loaded = await widget.repo.getPostById(docId);
+    final cmts = await widget.repo.fetchComments(docId);
     if (!mounted) return;
 
     setState(() {
@@ -74,7 +78,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   void _replaceComment(CommunityComment c) {
-    final i = _comments.indexWhere((e) => e.id == c.id);
+    final i = _comments.indexWhere((e) => e.docId == c.docId);
     if (i >= 0) {
       setState(() {
         _comments[i] = c;
@@ -83,15 +87,22 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   Future<void> _toggleLike(CommunityComment c, {required bool inc}) async {
+    final postDocId = _post.docId;
+    final commentDocId = c.docId;
+
+    if (postDocId == null || commentDocId == null) return;
+
     final updated = await widget.repo.likeComment(
-      _post.id,
-      c.id,
+      postDocId,
+      commentDocId,
       increment: inc,
     );
     if (updated != null) _replaceComment(updated);
   }
 
   Future<void> _editComment(CommunityComment c) async {
+    if (c.docId == null) return;
+
     final ctrl = TextEditingController(text: c.content);
     final done = await showDialog<String>(
       context: context,
@@ -120,20 +131,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     );
 
     if (done == null || done.isEmpty) return;
-    final saved = await widget.repo.updateComment(c.copyWith(content: done));
+    final saved = await widget.repo
+        .updateComment(c.copyWith(content: done, docId: c.docId, postDocId: c.postDocId));
     if (saved != null) _replaceComment(saved);
   }
 
   void _togglePostLike() {
-    setState(() {
-      if (_postLiked) {
-        if (_postLikes > 0) _postLikes--;
-        _postLiked = false;
-      } else {
-        _postLikes++;
-        _postLiked = true;
-      }
-    });
+    // Post 좋아요 API 구현 예정 (현재는 미구현)
   }
 
   @override
@@ -196,7 +200,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
-                                              '${_post.author} · $dateStr · 조회 ${_post.views} · 댓글 ${_comments.length} · 좋아요 $_postLikes',
+                                              '${_post.author} · $dateStr · 조회 ${_post.views} · 댓글 ${_comments.length} · 좋아요 ${_post.likes}',
                                               style: AppTextStyles.caption
                                                   .copyWith(
                                                     color:
@@ -240,13 +244,9 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                                               child: IconButton(
                                                 onPressed: _togglePostLike,
                                                 icon: Icon(
-                                                  _postLiked
-                                                      ? Icons.thumb_up_rounded
-                                                      : Icons.thumb_up_outlined,
+                                                  Icons.thumb_up_outlined,
                                                   size: 24,
-                                                  color: _postLiked
-                                                      ? AppColors.primaryText
-                                                      : AppColors.secondaryText,
+                                                  color: AppColors.secondaryText,
                                                 ),
                                                 splashRadius: 20,
                                               ),
@@ -262,7 +262,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                                         color: AppColors.border,
                                       ),
 
-                                      // 3) 댓글 섹션 (목록으로는 여기서 제거!)
+                                      // 3) 댓글 섹션
                                       Padding(
                                         padding: const EdgeInsets.fromLTRB(
                                           16,
@@ -270,6 +270,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                                           16,
                                           16,
                                         ),
+                                        // 💡 오류 지점: _buildCommentSection 메서드 호출
                                         child: _buildCommentSection(context),
                                       ),
                                     ],
@@ -283,7 +284,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                                   color: AppColors.border,
                                 ),
 
-                                // 🔻 공지 detail과 같은 스타일의 '목록으로' 버튼 (카드 하단 고정)
+                                // 🔻 '목록으로' 버튼 (카드 하단 고정)
                                 Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     16,
@@ -301,33 +302,35 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                                       style: ButtonStyle(
                                         backgroundColor:
                                             MaterialStateProperty.resolveWith<
-                                              Color
-                                            >((states) {
-                                              if (states.contains(
-                                                MaterialState.disabled,
-                                              )) {
-                                                return AppColors.border;
-                                              }
-                                              if (states.contains(
-                                                MaterialState.pressed,
-                                              )) {
-                                                return AppColors.primaryText
-                                                    .withOpacity(0.9);
-                                              }
-                                              if (states.contains(
-                                                MaterialState.hovered,
-                                              )) {
-                                                return AppColors.secondaryText;
-                                              }
-                                              return AppColors.primaryText;
-                                            }),
+                                                Color>(
+                                          (states) {
+                                            if (states.contains(
+                                              MaterialState.disabled,
+                                            )) {
+                                              return AppColors.border;
+                                            }
+                                            if (states.contains(
+                                              MaterialState.pressed,
+                                            )) {
+                                              return AppColors.primaryText
+                                                  .withOpacity(0.9);
+                                            }
+                                            if (states.contains(
+                                              MaterialState.hovered,
+                                            )) {
+                                              return AppColors.secondaryText;
+                                            }
+                                            return AppColors.primaryText;
+                                          },
+                                        ),
                                         foregroundColor:
                                             MaterialStateProperty.all<Color>(
-                                              Colors.white,
-                                            ),
+                                          Colors.white,
+                                        ),
                                         shape: MaterialStateProperty.all(
                                           RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
+                                            borderRadius:
+                                                BorderRadius.circular(
                                               8,
                                             ),
                                           ),
@@ -427,6 +430,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   }
 
   Widget _buildCommentTile(BuildContext context, CommunityComment c) {
+    final isLiked = false; // TODO: 좋아요 상태 API 연동 필요
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -467,7 +472,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                   label: '삭제',
                   icon: Icons.delete_outline,
                   onTap: () async {
-                    await widget.repo.deleteComment(_post.id, c.id);
+                    if (_post.docId == null || c.docId == null) return;
+                    await widget.repo.deleteComment(_post.docId!, c.docId!);
                     await _load();
                   },
                 ),
@@ -492,8 +498,10 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
           children: [
             _buildCommentActionPill(
               label: '좋아요 ${c.likes}',
-              icon: Icons.thumb_up_alt_outlined,
-              onTap: () => _toggleLike(c, inc: true),
+              icon: isLiked
+                  ? Icons.thumb_up_alt_rounded
+                  : Icons.thumb_up_alt_outlined,
+              onTap: () => _toggleLike(c, inc: !isLiked),
             ),
           ],
         ),
@@ -585,13 +593,15 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
             ),
           ),
           const SizedBox(width: 8),
-          // 동그라미 제거, 아이콘 색 primaryText
           IconButton(
             onPressed: () async {
               final text = _commentCtrl.text.trim();
               if (text.isEmpty) return;
+              
+              final postDocId = _post.docId;
+              if (postDocId == null) return;
 
-              await widget.repo.addComment(_post.id, '익명', text);
+              await widget.repo.addComment(postDocId, '익명', text);
 
               _commentCtrl.clear();
               await _load();

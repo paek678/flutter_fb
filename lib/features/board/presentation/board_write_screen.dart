@@ -1,4 +1,3 @@
-// lib/features/board/presentation/notice_write_screen.dart
 import 'package:flutter/material.dart';
 
 // 공지 관련
@@ -71,7 +70,8 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
     try {
       final created = await repo.createNotice(draft);
       if (!mounted) return;
-      Navigator.pop(context, created);
+      // 성공 시 새로 생성된 Notice 객체를 반환하며 화면을 닫습니다.
+      Navigator.pop(context, created); 
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
@@ -96,52 +96,34 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // 섹션 타이틀
-                    Text(
-                      '공지 정보',
-                      style: AppTextStyles.body1.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryText,
-                      ),
+                    // 섹션 타이틀: _SectionTitle 위젯 사용으로 변경
+                    const _SectionTitle(
+                      icon: Icons.topic_rounded,
+                      title: '공지 정보',
                     ),
                     const SizedBox(height: 12),
 
-                    // 이벤트 / 점검 카테고리 선택 (list_screen 버튼 스타일 재사용)
-                    Row(
+                    // 카테고리 선택 Pill (General, Event, Maintenance)
+                    // Row 대신 Wrap을 사용하여 작은 화면에서 줄바꿈이 되도록 개선
+                    Wrap(
+                      spacing: 8.0,
+                      runSpacing: 8.0,
                       children: [
+                        _buildCategoryPill(
+                          NoticeCategory.general,
+                          '일반 공지',
+                          Icons.description_rounded,
+                        ),
                         _buildCategoryPill(
                           NoticeCategory.event,
                           '이벤트',
-                          Icons.celebration,
+                          Icons.celebration_rounded,
                         ),
-                        const SizedBox(width: 8),
                         _buildCategoryPill(
                           NoticeCategory.maintenance,
                           '점검',
                           Icons.build_rounded,
                         ),
-                        const Spacer(),
-                        if (_category == NoticeCategory.general)
-                          Text(
-                            '일반 공지',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.secondaryText,
-                            ),
-                          )
-                        else
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _category = NoticeCategory.general;
-                              });
-                            },
-                            child: Text(
-                              '일반 공지로 전환',
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.secondaryText,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
 
@@ -215,7 +197,7 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
                         height: 1.5,
                       ),
                       decoration: InputDecoration(
-                        hintText: '공지 내용을 작성하세요. (엔터로 줄바꿈)',
+                        hintText: '공지 내용을 작성하세요. (최소 10자)',
                         alignLabelWithHint: true,
                         filled: true,
                         fillColor: Colors.white,
@@ -281,19 +263,19 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
                         style: ButtonStyle(
                           backgroundColor:
                               MaterialStateProperty.resolveWith<Color>((
-                                states,
-                              ) {
-                                if (states.contains(MaterialState.disabled)) {
-                                  return AppColors.border;
-                                }
-                                if (states.contains(MaterialState.pressed)) {
-                                  return AppColors.primaryText.withOpacity(0.9);
-                                }
-                                if (states.contains(MaterialState.hovered)) {
-                                  return AppColors.secondaryText;
-                                }
-                                return AppColors.primaryText;
-                              }),
+                            states,
+                          ) {
+                            if (states.contains(MaterialState.disabled)) {
+                              return AppColors.border;
+                            }
+                            if (states.contains(MaterialState.pressed)) {
+                              return AppColors.primaryText.withOpacity(0.9);
+                            }
+                            if (states.contains(MaterialState.hovered)) {
+                              return AppColors.secondaryText;
+                            }
+                            return AppColors.primaryText;
+                          }),
                           foregroundColor: MaterialStateProperty.all<Color>(
                             Colors.white,
                           ),
@@ -332,7 +314,7 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
     );
   }
 
-  // ===== UI blocks =====
+  // ===== UI blocks (개선된 카테고리 선택 UI) =====
 
   Widget _buildCategoryPill(
     NoticeCategory target,
@@ -344,12 +326,8 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
     return GestureDetector(
       onTap: () {
         setState(() {
-          // 같은 걸 한 번 더 누르면 일반 공지로 돌아가게
-          if (_category == target) {
-            _category = NoticeCategory.general;
-          } else {
-            _category = target;
-          }
+          // 탭하면 해당 카테고리로 무조건 변경 (General 포함)
+          _category = target;
         });
       },
       child: AnimatedContainer(
@@ -360,6 +338,7 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
               ? AppColors.primaryText.withOpacity(0.9)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
+          border: isSelected ? null : Border.all(color: AppColors.border, width: 1),
           boxShadow: isSelected
               ? [
                   BoxShadow(
@@ -373,6 +352,13 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 아이콘 추가
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? Colors.white : AppColors.primaryText,
+            ),
+            const SizedBox(width: 6),
             Text(
               label,
               style: AppTextStyles.body2.copyWith(
@@ -385,26 +371,9 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
       ),
     );
   }
-
-  // ===== utils =====
-
-  String _fmtDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
-
-  String _catLabel(NoticeCategory c) {
-    switch (c) {
-      case NoticeCategory.general:
-        return '일반';
-      case NoticeCategory.event:
-        return '이벤트';
-      case NoticeCategory.maintenance:
-        return '점검';
-    }
-  }
 }
 
+// _SectionTitle의 ColorScheme 사용을 AppColors 사용으로 변경하여 일관성 유지
 class _SectionTitle extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -414,13 +383,14 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+        Icon(icon, size: 18, color: AppColors.primaryText),
         const SizedBox(width: 6),
         Text(
           title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          style: AppTextStyles.body1.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.primaryText,
+          ),
         ),
       ],
     );

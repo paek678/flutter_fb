@@ -1,213 +1,214 @@
+// lib/features/community/repository/community_repository.dart
+
 import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore 타입 사용을 위해 추가
 
 import '../model/community_post.dart';
 import '../model/post_category.dart';
 import '../model/community_comment.dart';
 import '../../../core/services/firebase_service.dart';
+import '../../../core/services/firestore_mappers.dart'; // Firestore 매퍼를 사용하여 CommunityPost에 docId 추가
+
+// ⚠️ 참고: InMemoryCommunityRepository 클래스는 제거하고 FirestoreCommunityRepository로 대체합니다.
+// CommunityPost 모델에 docId 필드를 추가하여 Firestore 문서 ID를 저장할 수 있게 해야 합니다.
+// (CommunityPost 모델 수정이 필요하지만, 여기서는 docId가 null일 때 임시 ID로 처리하는 방식으로 진행합니다.)
+
 abstract class CommunityRepository {
   Future<List<CommunityPost>> fetchPosts({String? query, PostCategory? category});
-  Future<CommunityPost?> getPostById(int id);
+  Future<CommunityPost?> getPostById(String docId); // id를 int 대신 docId(String)로 변경
   Future<CommunityPost> createPost(CommunityPost post);
   Future<CommunityPost> updatePost(CommunityPost post);
-  Future<void> deletePost(int id);
+  Future<void> deletePost(String docId); // id를 docId(String)로 변경
 
-  Future<List<CommunityComment>> fetchComments(int postId);
-  Future<CommunityComment> addComment(int postId, String author, String content);
-  Future<void> deleteComment(int postId, int commentId);
+  Future<List<CommunityComment>> fetchComments(String postDocId); // postId를 postDocId(String)로 변경
+  Future<CommunityComment> addComment(
+      String postDocId, String author, String content);
+  Future<void> deleteComment(String postDocId, String commentDocId); // id를 docId(String)로 변경
 
-  Future<CommunityPost?> incrementViews(int postId);
-  Future<CommunityComment?> likeComment(int postId, int commentId, {bool increment = true});
+  Future<CommunityPost?> incrementViews(String postDocId);
+  Future<CommunityComment?> likeComment(String postDocId, String commentDocId,
+      {bool increment = true});
   Future<CommunityComment?> updateComment(CommunityComment comment);
 }
 
-class InMemoryCommunityRepository implements CommunityRepository {
-  int _postAutoId = 0;
-  int _cmtAutoId = 0;
+/// 🚀 Firestore를 사용하는 CommunityRepository 구현체
+class FirestoreCommunityRepository implements CommunityRepository {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  final List<CommunityPost> _posts = [];
-  final Map<int, List<CommunityComment>> _comments = {};
-
-  // 🔥 Firestore → 메모리로 한번 싹 가져오는 초기화 함수
-  Future<void> loadFromFirestore() async {
-    // 1) 게시글 전부 가져오기 (mapper까지 끝난 상태로 들어옴)
-    final remotePosts = await FirestoreService.fetchAllCommunityPosts(limit: 100);
-
-    // 2) 필요하면 댓글도 Firestore에서 가져와서 넣을 수 있음
-    //    지금은 예시로 "댓글은 아직 안쓴다" 가정하고 빈 리스트.
-    //    나중에 FirestoreService에 fetchAllComments() 같은 거 만들면 여기서 같이 호출하면 됨.
-    final List<CommunityComment> remoteComments = const [];
-
-    _replaceWithRemoteData(
-      posts: remotePosts,
-      comments: remoteComments,
-    );
-  }
-
-  /// 내부 캐시 교체 함수 (외부에서는 loadFromFirestore만 쓰면 됨)
-  void _replaceWithRemoteData({
-    required List<CommunityPost> posts,
-    required List<CommunityComment> comments,
-  }) {
-    // posts 세팅
-    _posts
-      ..clear()
-      ..addAll(posts);
-
-    if (_posts.isEmpty) {
-      _postAutoId = 0;
-    } else {
-      _postAutoId = _posts.map((p) => p.id).reduce(max);
-    }
-
-    // comments 세팅 (postId 기준으로 그룹)
-    _comments.clear();
-    for (final c in comments) {
-      final list = _comments.putIfAbsent(c.postId, () => <CommunityComment>[]);
-      list.add(c);
-    }
-
-    if (comments.isEmpty) {
-      _cmtAutoId = 0;
-    } else {
-      _cmtAutoId = comments.map((c) => c.id).reduce(max);
-    }
-  }
-
-  // ───────── 이하 기존 메서드들은 그대로 ─────────
+  // ---------------------------------------------------------------------------
+  // 1) Post
+  // ---------------------------------------------------------------------------
 
   @override
-  Future<List<CommunityPost>> fetchPosts({String? query, PostCategory? category}) async {
-    await Future.delayed(const Duration(milliseconds: 150));
-    Iterable<CommunityPost> it = _posts;
-    if (category != null) {
-      it = it.where((p) => p.category == category);
+  Future<List<CommunityPost>> fetchPosts(
+      {String? query, PostCategory? category}) async {
+    if (query != null && query.isNotEmpty) {
+      // 쿼리가 있으면 제목으로 검색 (FirestoreService에 이미 구현된 메서드 활용)
+      return FirestoreService.searchPostsByExactTitle(query);
     }
-    if (query != null && query.trim().isNotEmpty) {
-      final q = query.toLowerCase().trim();
-      it = it.where((p) =>
-          p.title.toLowerCase().contains(q) ||
-          p.content.toLowerCase().contains(q));
-    }
-    final list = it.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return list;
+    // 쿼리가 없으면 일반 게시물 목록을 가져옴 (카테고리 필터링 포함)
+    return FirestoreService.fetchCommunityPosts(category: category);
   }
 
   @override
-  Future<CommunityPost?> getPostById(int id) async {
-    await Future.delayed(const Duration(milliseconds: 80));
+  // 기존 int id → String docId로 변경
+  Future<CommunityPost?> getPostById(String docId) async {
     try {
-      return _posts.firstWhere((p) => p.id == id);
-    } catch (_) {
+      final doc = await _db.collection('boards').doc(docId).get();
+      if (!doc.exists) return null;
+      // 매퍼를 사용하여 Firestore 문서에서 CommunityPost로 변환
+      final post = communityPostFromFirestoreDoc(doc);
+      // docId를 저장할 수 있도록 모델을 확장해야 하지만, 현재는 doc.id를 사용하여 docId를 반환
+      return post.copyWith(docId: docId);
+    } catch (e) {
+      print('Error getting post by docId $docId: $e');
       return null;
     }
   }
 
   @override
   Future<CommunityPost> createPost(CommunityPost post) async {
-    await Future.delayed(const Duration(milliseconds: 80));
-    final newPost = post.copyWith(id: ++_postAutoId, views: 0, commentCount: 0);
-    _posts.add(newPost);
-    return newPost;
+    // FirestoreService를 사용하여 게시글을 생성하고 docId를 반환받음
+    final docId = await FirestoreService.createCommunityPost(post);
+    
+    // 생성된 post 객체에 실제 docId를 반영하여 반환 (CommunityPost 모델에 docId 필드가 있다고 가정하고 copyWith 사용)
+    return post.copyWith(docId: docId);
   }
 
   @override
   Future<CommunityPost> updatePost(CommunityPost post) async {
-    await Future.delayed(const Duration(milliseconds: 80));
-    final idx = _posts.indexWhere((p) => p.id == post.id);
-    if (idx >= 0) _posts[idx] = post;
+    if (post.docId == null) {
+      throw Exception('Post document ID is required for update.');
+    }
+    // FirestoreService를 사용하여 게시글 업데이트
+    await FirestoreService.updateCommunityPost(post.docId!, post);
     return post;
   }
 
   @override
-  Future<void> deletePost(int id) async {
-    await Future.delayed(const Duration(milliseconds: 80));
-    _posts.removeWhere((p) => p.id == id);
-    _comments.remove(id);
+  // 기존 int id → String docId로 변경
+  Future<void> deletePost(String docId) async {
+    // FirestoreService를 사용하여 게시글 삭제
+    await FirestoreService.deleteCommunityPost(docId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2) Comment
+  // ---------------------------------------------------------------------------
+
+  @override
+  // 기존 int postId → String postDocId로 변경
+  Future<List<CommunityComment>> fetchComments(String postDocId) async {
+    // FirestoreService를 사용하여 댓글 목록 조회
+    return FirestoreService.fetchCommentsForPost(postDocId);
   }
 
   @override
-  Future<List<CommunityComment>> fetchComments(int postId) async {
-    await Future.delayed(const Duration(milliseconds: 120));
-    return List<CommunityComment>.from(_comments[postId] ?? const []);
-  }
-
-  @override
-  Future<CommunityComment> addComment(int postId, String author, String content) async {
-    await Future.delayed(const Duration(milliseconds: 120));
-    final c = CommunityComment(
-      id: ++_cmtAutoId,
-      postId: postId,
+  Future<CommunityComment> addComment(
+      String postDocId, String author, String content) async {
+    final newComment = CommunityComment(
+      id: 0, // Firestore에서는 실제 ID 대신 docId를 사용하므로 임시 값 0
+      postId: 0, // 임시 값
       author: author.isEmpty ? '익명' : author,
       content: content,
       createdAt: DateTime.now(),
     );
-    _comments.putIfAbsent(postId, () => []).add(c);
 
-    final idx = _posts.indexWhere((p) => p.id == postId);
-    if (idx >= 0) {
-      final cur = _posts[idx];
-      _posts[idx] = cur.copyWith(commentCount: cur.commentCount + 1);
-    }
-    return c;
+    // FirestoreService를 사용하여 댓글 추가하고 docId를 반환받음
+    final commentDocId = await FirestoreService.createCommentForPost(
+      postDocId,
+      newComment,
+    );
+    
+    // 추가된 댓글 객체에 실제 docId를 반영하여 반환 (CommunityComment 모델에 docId 필드가 있다고 가정)
+    return newComment.copyWith(docId: commentDocId);
   }
 
   @override
-  Future<void> deleteComment(int postId, int commentId) async {
-    await Future.delayed(const Duration(milliseconds: 80));
-    final list = _comments[postId];
-    if (list == null) return;
-
-    final before = list.length;
-    list.removeWhere((e) => e.id == commentId);
-    final removed = before - list.length;
-
-    if (removed > 0) {
-      final idx = _posts.indexWhere((p) => p.id == postId);
-      if (idx >= 0) {
-        final cur = _posts[idx];
-        final newCount = cur.commentCount - removed;
-        _posts[idx] = cur.copyWith(
-          commentCount: newCount < 0 ? 0 : newCount,
-        );
-      }
-    }
-  }
-
-  @override
-  Future<CommunityPost?> incrementViews(int postId) async {
-    await Future.delayed(const Duration(milliseconds: 60));
-    final idx = _posts.indexWhere((p) => p.id == postId);
-    if (idx < 0) return null;
-    final cur = _posts[idx];
-    final updated = cur.copyWith(views: cur.views + 1);
-    _posts[idx] = updated;
-    return updated;
-  }
-
-  @override
-  Future<CommunityComment?> likeComment(int postId, int commentId, {bool increment = true}) async {
-    await Future.delayed(const Duration(milliseconds: 60));
-    final list = _comments[postId];
-    if (list == null) return null;
-    final idx = list.indexWhere((e) => e.id == commentId);
-    if (idx < 0) return null;
-
-    final cur = list[idx];
-    final nextLikes = increment ? cur.likes + 1 : cur.likes - 1;
-    final updated = cur.copyWith(likes: nextLikes < 0 ? 0 : nextLikes);
-    list[idx] = updated;
-    return updated;
+  Future<void> deleteComment(String postDocId, String commentDocId) async {
+    // FirestoreService를 사용하여 댓글 삭제
+    await FirestoreService.deleteCommentForPost(postDocId, commentDocId);
   }
 
   @override
   Future<CommunityComment?> updateComment(CommunityComment comment) async {
-    await Future.delayed(const Duration(milliseconds: 80));
-    final list = _comments[comment.postId];
-    if (list == null) return null;
-    final idx = list.indexWhere((e) => e.id == comment.id);
-    if (idx < 0) return null;
-
-    list[idx] = comment;
+    if (comment.postDocId == null || comment.docId == null) {
+      throw Exception('Comment document ID and Post document ID are required for update.');
+    }
+    await FirestoreService.updateCommentForPost(
+      comment.postDocId!,
+      comment.docId!,
+      comment,
+    );
     return comment;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3) Likes / Views
+  // ---------------------------------------------------------------------------
+
+  @override
+  Future<CommunityPost?> incrementViews(String postDocId) async {
+    try {
+      final postRef = _db.collection('boards').doc(postDocId);
+
+      // Firestore 트랜잭션을 사용하여 조회수 1 증가
+      await _db.runTransaction((transaction) async {
+        final docSnapshot = await transaction.get(postRef);
+        if (!docSnapshot.exists) {
+          throw Exception("Post not found");
+        }
+        final currentViews = docSnapshot.data()?['view_count'] as int? ?? 0;
+        final newViews = currentViews + 1;
+
+        transaction.update(postRef, {'view_count': newViews});
+      });
+
+      // 업데이트된 후의 데이터를 다시 가져와 반환
+      final updatedSnap = await postRef.get();
+      if (!updatedSnap.exists) return null;
+      
+      final post = communityPostFromFirestoreDoc(updatedSnap);
+      return post.copyWith(docId: postDocId);
+
+    } on Exception catch (e) {
+      print('Error incrementing views for $postDocId: $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<CommunityComment?> likeComment(
+      String postDocId, String commentDocId, {bool increment = true}) async {
+    try {
+      final commentRef = _db
+          .collection('boards')
+          .doc(postDocId)
+          .collection('comments')
+          .doc(commentDocId);
+
+      // Firestore 트랜잭션을 사용하여 좋아요 수 증가/감소
+      await _db.runTransaction((transaction) async {
+        final docSnapshot = await transaction.get(commentRef);
+        if (!docSnapshot.exists) {
+          throw Exception("Comment not found");
+        }
+        final currentLikes = docSnapshot.data()?['likes'] as int? ?? 0;
+        final newLikes = increment ? currentLikes + 1 : currentLikes - 1;
+
+        transaction.update(commentRef, {'likes': newLikes < 0 ? 0 : newLikes});
+      });
+
+      // 업데이트된 후의 데이터를 다시 가져와 반환
+      final updatedSnap = await commentRef.get();
+      if (!updatedSnap.exists) return null;
+      
+      final comment = commentFromFirestoreDoc(updatedSnap);
+      return comment.copyWith(docId: commentDocId, postDocId: postDocId);
+
+    } on Exception catch (e) {
+      print('Error liking comment $commentDocId in post $postDocId: $e');
+      return null;
+    }
   }
 }

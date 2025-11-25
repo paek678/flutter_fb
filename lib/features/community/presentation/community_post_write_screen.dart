@@ -1,3 +1,4 @@
+// lib/features/community/presentation/community_post_write_screen.dart
 import 'package:flutter/material.dart';
 
 // 공통 테마
@@ -7,7 +8,8 @@ import '../../../core/theme/app_text_styles.dart';
 // 커뮤니티 도메인
 import '../model/community_post.dart';
 import '../model/post_category.dart';
-import '../repository/community_repository.dart';
+// 💡 CommunityRepository 인터페이스 또는 추상 클래스 import
+import '../repository/community_repository.dart'; 
 
 class CommunityPostWriteScreen extends StatefulWidget {
   const CommunityPostWriteScreen({super.key});
@@ -35,13 +37,14 @@ class _CommunityPostWriteScreenState extends State<CommunityPostWriteScreen> {
   }
 
   Future<void> _submit() async {
-    final repo =
-        ModalRoute.of(context)!.settings.arguments
-            as InMemoryCommunityRepository?;
+    // 💡 수정: Repository 타입을 CommunityRepository로 변경
+    final repo = ModalRoute.of(context)!.settings.arguments as CommunityRepository?;
+    
     if (repo == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('레포지토리를 찾을 수 없습니다.')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('레포지토리를 찾을 수 없습니다.')),
+      );
       return;
     }
 
@@ -49,27 +52,33 @@ class _CommunityPostWriteScreenState extends State<CommunityPostWriteScreen> {
 
     setState(() => _submitting = true);
 
+    // 💡 docId를 null로 설정하여 Firestore에서 자동 생성되도록 유도
+    // (CommunityPost 모델에 docId 필드가 있다고 가정)
     final post = CommunityPost(
-      id: 0,
+      id: 0, // Firestore 문서 ID는 생성 시점에 null
       title: _titleCtrl.text.trim(),
       content: _contentCtrl.text.trim(),
       author: '나', // TODO: 로그인 사용자명으로 교체
       createdAt: DateTime.now(),
       category: PostCategory.general, // 카테고리 고정
       views: 0,
+      likes: 0, // 좋아요 필드 추가 (이전 코드에서 누락되어 있었다면 추가)
       commentCount: 0,
     );
 
     try {
       final created = await repo.createPost(post);
+      
       if (!mounted) return;
-      Navigator.pop(context, created);
+      
+      // 💡 생성된 게시글 객체를 목록 화면으로 반환
+      Navigator.pop(context, created); 
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('작성 실패: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('작성 실패: ${e.toString()}')),
+      );
     }
   }
 
@@ -165,19 +174,19 @@ class _CommunityPostWriteScreenState extends State<CommunityPostWriteScreen> {
                         style: ButtonStyle(
                           backgroundColor:
                               MaterialStateProperty.resolveWith<Color>((
-                                states,
-                              ) {
-                                if (states.contains(MaterialState.disabled)) {
-                                  return AppColors.border;
-                                }
-                                if (states.contains(MaterialState.pressed)) {
-                                  return AppColors.primaryText.withOpacity(0.9);
-                                }
-                                if (states.contains(MaterialState.hovered)) {
-                                  return AppColors.secondaryText;
-                                }
-                                return AppColors.primaryText;
-                              }),
+                            states,
+                          ) {
+                            if (states.contains(MaterialState.disabled)) {
+                              return AppColors.border;
+                            }
+                            if (states.contains(MaterialState.pressed)) {
+                              return AppColors.primaryText.withOpacity(0.9);
+                            }
+                            if (states.contains(MaterialState.hovered)) {
+                              return AppColors.secondaryText;
+                            }
+                            return AppColors.primaryText;
+                          }),
                           foregroundColor: MaterialStateProperty.all<Color>(
                             Colors.white,
                           ),
