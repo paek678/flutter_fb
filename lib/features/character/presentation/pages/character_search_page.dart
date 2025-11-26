@@ -14,11 +14,17 @@ import 'character_detail_page.dart';
 
 class CharacterSearchTab extends StatefulWidget {
   final void Function(int)? onTabChange;
-
-  /// 필요하면 바깥에서 다른 구현체를 주입할 수도 있음
   final CharacterRepository? repository;
 
-  const CharacterSearchTab({super.key, this.onTabChange, this.repository});
+  // ✅ 추가: 초기 검색어
+  final String? initialQuery;
+
+  const CharacterSearchTab({
+    super.key,
+    this.onTabChange,
+    this.repository,
+    this.initialQuery,
+  });
 
   @override
   State<CharacterSearchTab> createState() => _CharacterSearchTabState();
@@ -30,15 +36,11 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   String _selectedServer = '전체';
   bool _isSearching = false;
 
-  // 검색 결과
   List<Character> _searchResults = [];
-
-  // 랭킹 미리보기
   List<RankingRow> _rankingRows = [];
   bool _isRankingLoading = true;
 
   TabController? _tabController;
-
   late final CharacterRepository _repository;
 
   @override
@@ -59,18 +61,34 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   @override
   void initState() {
     super.initState();
-    // ⭐ 변경: 기본 구현체를 InMemory → Firebase로
-    _repository =
-        widget.repository ?? FirebaseCharacterRepository(); // ★ CHANGED
-    _loadRanking(); // 시작 시 랭킹 한 번 불러오기
+    _repository = widget.repository ?? FirebaseCharacterRepository();
+    _loadRanking();
+
+    // ✅ TopAppBar에서 넘어온 초기 검색어 처리
+    final initial = widget.initialQuery?.trim();
+    if (initial != null && initial.isNotEmpty) {
+      _controller.text = initial;
+      Future.microtask(_searchCharacter);
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final controller = DefaultTabController.of(context);
-    if (controller != null && controller != _tabController) {
+    // ✅ 탭 컨트롤러가 없을 수도 있으니 maybeOf 사용
+    final controller = DefaultTabController.maybeOf(context);
+
+    if (controller == null) {
+      // 이전에 다른 탭에서 쓰다가 이제 단독 화면에서 쓸 수도 있으니까 정리
+      if (_tabController != null) {
+        _tabController!.removeListener(_onTabChanged);
+        _tabController = null;
+      }
+      return;
+    }
+
+    if (controller != _tabController) {
       _tabController?.removeListener(_onTabChanged);
       _tabController = controller;
       _tabController!.addListener(_onTabChanged);
@@ -78,7 +96,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   }
 
   void _onTabChanged() {
-    const myIndex = 0; // 캐릭터 탭이 0번째라고 가정
+    const myIndex = 0;
 
     if (_tabController == null) return;
 
@@ -100,7 +118,6 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
 
     try {
       final server = _selectedServer == '전체' ? null : _selectedServer;
-
       final rows = await _repository.fetchRankingPreview(server: server);
 
       if (!mounted) return;
@@ -108,13 +125,12 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
         _rankingRows = rows;
         _isRankingLoading = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _rankingRows = [];
         _isRankingLoading = false;
       });
-      // 필요하면 스낵바로 에러 표시
     }
   }
 
@@ -144,12 +160,11 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
       setState(() {
         _searchResults = results;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _searchResults = [];
       });
-      // 에러 표현하고 싶으면 여기서 처리
     }
   }
 
@@ -164,32 +179,25 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   Widget build(BuildContext context) {
     super.build(context);
 
-    // 🔹 검색 결과 화면
+    // ✅ Expanded 중첩 제거: 바깥 Expanded 삭제
     if (_isSearching) {
       return Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Expanded(
-              child: CharacterSearchResult(
-                query: _controller.text,
-                results: _searchResults,
-                onCharacterSelected: (character) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CharacterDetailView(character: character),
-                    ),
-                  );
-                },
+        child: CharacterSearchResult(
+          query: _controller.text,
+          results: _searchResults,
+          onCharacterSelected: (character) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CharacterDetailView(character: character),
               ),
-            ),
-          ],
+            );
+          },
         ),
       );
     }
 
-    // 🔹 기본 검색 + 랭킹 미리보기 화면
     return SafeArea(
       child: SingleChildScrollView(
         child: Padding(
@@ -219,9 +227,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
                       onMoreTap: () {
                         widget.onTabChange?.call(1);
                       },
-                      // ⭐ 추가: 랭킹 row 눌렀을 때 → characterId로 상세 조회 후 이동
                       onRowTap: (row) async {
-                        // ★ NEW
                         final character = await _repository.getCharacterById(
                           row.characterId,
                         );
