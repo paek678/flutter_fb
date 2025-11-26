@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 
 // 💡 Firestore 기반의 CommunityRepository 인터페이스 또는 구현체를 import
-import '../repository/community_repository.dart'; 
+import '../repository/community_repository.dart';
 import '../model/community_post.dart';
 
 // 앱 공통 디자인
@@ -21,9 +21,9 @@ class CommunityListScreen extends StatefulWidget {
 
 class _CommunityListScreenState extends State<CommunityListScreen> {
   final TextEditingController _searchController = TextEditingController();
-  
+
   // 💡 Firestore 기반의 CommunityRepository를 사용하도록 타입 수정
-  late final CommunityRepository _repo; 
+  late final CommunityRepository _repo;
 
   List<CommunityPost> _allPosts = [];
   List<CommunityPost> _filteredPosts = [];
@@ -32,11 +32,12 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
   @override
   void initState() {
     super.initState();
-    
+
     // 💡 Repository 초기화: Firestore 구현체 인스턴스를 생성하거나 주입받아야 합니다.
     // 임시로 CommunityRepository의 Firestore 구현체라고 가정하겠습니다.
-    _repo = FirestoreCommunityRepository(); // 실제 Firestore 구현체 인스턴스 (예: FirestoreCommunityRepository())
-    
+    _repo =
+        FirestoreCommunityRepository(); // 실제 Firestore 구현체 인스턴스 (예: FirestoreCommunityRepository())
+
     _load();
     _searchController.addListener(_applyFilter);
   }
@@ -68,14 +69,14 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       setState(() => _filteredPosts = List.of(_allPosts));
       return;
     }
-    
+
     setState(() {
       _filteredPosts = _allPosts.where((p) {
         final t = p.title.toLowerCase();
         final c = p.content.toLowerCase();
         return t.contains(q) || c.contains(q);
       }).toList();
-      
+
       // 검색 결과도 최신 순으로 정렬
       _filteredPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     });
@@ -132,28 +133,35 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
                         child: _loading
                             ? const Center(child: CircularProgressIndicator())
                             : _filteredPosts.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      '게시글이 없습니다.',
-                                      style: AppTextStyles.body2.copyWith(
-                                        color: AppColors.secondaryText,
-                                      ),
-                                    ),
-                                  )
-                                : ListView.separated(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 6,
-                                    ),
-                                    itemCount: _filteredPosts.length,
-                                    separatorBuilder: (_, __) => Divider(
-                                      height: 1,
-                                      color: Colors.grey.shade200,
-                                    ),
-                                    itemBuilder: (context, index) {
-                                      final p = _filteredPosts[index];
-                                      return _buildPostRow(context, p);
-                                    },
+                            ? Center(
+                                child: Text(
+                                  '게시글이 없습니다.',
+                                  style: AppTextStyles.body2.copyWith(
+                                    color: AppColors.secondaryText,
                                   ),
+                                ),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _load,
+                                color: AppColors.primaryText,
+                                backgroundColor: Colors.white,
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 6,
+                                  ),
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  itemCount: _filteredPosts.length,
+                                  separatorBuilder: (_, __) => Divider(
+                                    height: 1,
+                                    color: Colors.grey.shade200,
+                                  ),
+                                  itemBuilder: (context, index) {
+                                    final p = _filteredPosts[index];
+                                    return _buildPostRow(context, p);
+                                  },
+                                ),
+                              ),
                       ),
                     ],
                   ),
@@ -179,7 +187,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         final result = await Navigator.pushNamed(
           context,
           '/community_detail',
-          arguments: {'post': p, 'repo': _repo}, 
+          arguments: {'post': p, 'repo': _repo},
         );
 
         // 상세 화면에서 돌아왔을 때, 게시글이 수정/삭제되었을 경우 목록 새로고침
@@ -236,7 +244,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
           // 새 글이 작성되어 돌아왔다면 목록을 다시 로드하여 Firestore 최신 상태 반영
           if (created != null && created is CommunityPost) {
-            _load(); 
+            _load();
             // 💡 새 글을 목록에 추가하는 대신, _load()를 통해 Firestore에서 최신 데이터를 가져오는 것이 더 확실합니다.
           }
         },

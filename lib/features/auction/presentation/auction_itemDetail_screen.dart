@@ -27,7 +27,7 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
   Widget build(BuildContext context) {
     final Map<String, dynamic> j =
         (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ??
-            {};
+        {};
 
     final item = AuctionItem.fromJson(j);
 
