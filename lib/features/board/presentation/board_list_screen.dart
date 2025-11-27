@@ -16,7 +16,7 @@ class BoardListScreen extends StatefulWidget {
 class _BoardListScreenState extends State<BoardListScreen> {
   // 🔹 1. InMemoryNoticeRepository 대신 인터페이스 NoticeRepository 사용
   // 실제 구현체는 FirestoreNoticeRepository로 인스턴스화
-  late final NoticeRepository _repo; 
+  late final NoticeRepository _repo;
 
   int _selectedFilter = 0; // 0: 전체, 1: 이벤트, 2: 점검
   List<Notice> _notices = [];
@@ -28,7 +28,7 @@ class _BoardListScreenState extends State<BoardListScreen> {
   void initState() {
     super.initState();
     // 🔹 2. FirestoreNoticeRepository로 인스턴스 교체
-    _repo = FirestoreNoticeRepository(); 
+    _repo = FirestoreNoticeRepository();
     _loadForFilter(_selectedFilter);
   }
 
@@ -49,7 +49,11 @@ class _BoardListScreenState extends State<BoardListScreen> {
     }
 
     // Firestore에서 데이터를 불러옵니다.
-    final data = await _repo.fetchNotices(category: category, onlyPinned: false, query: '');
+    final data = await _repo.fetchNotices(
+      category: category,
+      onlyPinned: false,
+      query: '',
+    );
 
     if (!mounted) return;
     setState(() {
@@ -203,7 +207,9 @@ class _BoardListScreenState extends State<BoardListScreen> {
           }),
           foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
           shape: MaterialStateProperty.all(
-            const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(999))),
+            const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(999)),
+            ),
           ),
           textStyle: MaterialStateProperty.all(
             AppTextStyles.body2.copyWith(
@@ -272,21 +278,27 @@ class _BoardListScreenState extends State<BoardListScreen> {
       return Center(
         child: Text(
           '공지사항이 없습니다.',
-          // 🔹 오타 수정: copyWxith -> copyWith
-          style: AppTextStyles.body2.copyWith(color: AppColors.secondaryText), 
+          style: AppTextStyles.body2.copyWith(color: AppColors.secondaryText),
         ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      itemCount: _notices.length,
-      itemBuilder: (context, index) {
-        final n = _notices[index];
-        return _buildNoticeRow(context, n);
-      },
-      separatorBuilder: (_, __) =>
-          Divider(height: 1, color: Colors.grey.shade200),
+    return RefreshIndicator(
+      // 🔹 당겨서 새로고침 시 현재 필터 기준으로 다시 불러오기
+      onRefresh: () => _loadForFilter(_selectedFilter),
+      color: AppColors.primaryText, // 인디케이터 색상 (디자인 맞춤)
+      backgroundColor: Colors.white, // 배경색 (카드 배경과 맞춤)
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        physics: const AlwaysScrollableScrollPhysics(), // 🔹 아이템 적어도 당길 수 있게
+        itemCount: _notices.length,
+        itemBuilder: (context, index) {
+          final n = _notices[index];
+          return _buildNoticeRow(context, n);
+        },
+        separatorBuilder: (_, __) =>
+            Divider(height: 1, color: Colors.grey.shade200),
+      ),
     );
   }
 
@@ -323,30 +335,32 @@ class _BoardListScreenState extends State<BoardListScreen> {
     );
   }
 
-Widget _buildCategoryBadge(Notice n) {
-  final NoticeCategory c = n.category; // NoticeCategory? -> NoticeCategory로 수정
+  Widget _buildCategoryBadge(Notice n) {
+    final NoticeCategory c =
+        n.category; // NoticeCategory? -> NoticeCategory로 수정
 
-  String label = '공지';
-  Color bg = const Color(0xFFE9F5EE);
-  Color textColor = const Color(0xFF208C4E);
+    String label = '공지';
+    Color bg = const Color(0xFFE9F5EE);
+    Color textColor = const Color(0xFF208C4E);
 
-  switch (c) { // c가 NoticeCategory 타입이므로, case null:은 제거해야 합니다.
-    case NoticeCategory.event:
-      label = '이벤트';
-      bg = const Color(0xFFFFE2D2);
-      textColor = const Color(0xFF5A3C2A);
-      break;
-    case NoticeCategory.maintenance:
-      label = '점검';
-      bg = const Color(0xFFE3ECF5);
-      textColor = const Color(0xFF344055);
-      break;
-    case NoticeCategory.general: // general 케이스 명시 추가
-    default: // general이 아니거나 새로운 카테고리가 추가될 경우 대비
-      label = '공지';
-      bg = const Color(0xFFD6EFE8);
-      textColor = const Color(0xFF208C4E);
-  }
+    switch (c) {
+      // c가 NoticeCategory 타입이므로, case null:은 제거해야 합니다.
+      case NoticeCategory.event:
+        label = '이벤트';
+        bg = const Color(0xFFFFE2D2);
+        textColor = const Color(0xFF5A3C2A);
+        break;
+      case NoticeCategory.maintenance:
+        label = '점검';
+        bg = const Color(0xFFE3ECF5);
+        textColor = const Color(0xFF344055);
+        break;
+      case NoticeCategory.general: // general 케이스 명시 추가
+      default: // general이 아니거나 새로운 카테고리가 추가될 경우 대비
+        label = '공지';
+        bg = const Color(0xFFD6EFE8);
+        textColor = const Color(0xFF208C4E);
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

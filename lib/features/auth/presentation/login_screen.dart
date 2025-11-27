@@ -1,4 +1,10 @@
+import 'dart:io';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_fb/core/services/firebase_service.dart';
+import 'package:flutter_fb/features/auth/model/app_user.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -28,12 +34,93 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.pushReplacementNamed(context, '/home');
   }
 
-  void _onGoogleLogin() {
-    // TODO: 실제 Google 로그인 연동
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Google 로그인은 아직 연동 전입니다.')));
+static const String _webClientId =
+      '800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com';
+
+Future<void> _onGoogleLogin() async {
+  // 데스크톱/Web에서 눌렀을 때는 막기 (선택 사항)
+  if (!Platform.isAndroid && !Platform.isIOS) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Google 로그인은 모바일(Android/iOS)에서만 지원됩니다.')),
+    );
+    return;
   }
+
+  try {
+    // 🔹 0) serverClientId로 GoogleSignIn 초기화 (★ 새로 추가된 부분)
+    await GoogleSignIn.instance.initialize(
+      serverClientId: _webClientId,
+    );
+
+    // 1) Google Sign-In 플로우 시작
+    final GoogleSignInAccount? googleUser =
+        await GoogleSignIn.instance.authenticate();
+
+    if (googleUser == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google 로그인 취소됨')),
+      );
+      return;
+    }
+
+    // 2) 토큰 가져오기 (여기서는 authentication 에서 idToken 사용)
+    final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+    final credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+      // accessToken은 Firebase 로그인만 쓸 거면 굳이 없어도 됨
+    );
+
+    // 3) Firebase Auth 로그인
+    final UserCredential userCredential =
+        await FirebaseAuth.instance.signInWithCredential(credential);
+
+    final User? user = userCredential.user;
+    if (user == null) {
+      throw Exception('Firebase 로그인 실패: user == null');
+    }
+
+    final String uid = user.uid;
+    final now = DateTime.now();
+
+    // 4) Firestore users 컬렉션에서 uid로 조회
+    final existing = await FirestoreService.getUserByUid(uid);
+
+    if (existing == null) {
+      // 새 유저 문서 생성
+      final newUser = AppUser(
+        uid: uid,
+        email: user.email,
+        displayName: user.displayName ?? 'User',
+        provider: 'google',
+        role: 'user',
+        createdAt: now,
+        lastLoginAt: now,
+        lastActionAt: now,
+      );
+      await FirestoreService.createUser(newUser);
+    } else {
+      // 기존 유저면 마지막 로그인 시간만 갱신
+      final updated = existing.copyWith(lastLoginAt: now);
+      await FirestoreService.updateUser(updated);
+    }
+
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(context, '/home');
+  } catch (e, st) {
+    // 디버깅용 로그
+    // ignore: avoid_print
+    print('[Google Login Error] $e\n$st');
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Google 로그인 중 오류 발생: $e')),
+    );
+  }
+}
+
 
   void _onGuestLogin() {
     // 🔹 게스트 팝업 화면으로 이동 (이제 /home 말고 /guest_login 으로 감)

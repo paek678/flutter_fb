@@ -16,6 +16,7 @@ import '../features/community/presentation/community_detail_screen.dart';
 import '../features/community/model/community_post.dart';
 import '../features/community/repository/community_repository.dart';
 import '../features/auction/presentation/auction_favorite_screen.dart';
+import '../features/character/presentation/pages/top_app_bar_character_search_screen.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -51,6 +52,12 @@ class AppRouter {
           builder: (_) => const AuctionFavoriteScreen(),
           settings: settings,
         );
+      case '/character_search':
+        final query = settings.arguments as String? ?? '';
+        return MaterialPageRoute(
+          builder: (_) => TopAppBarCharacterSearchScreen(query: query),
+          settings: settings,
+        );
       // 공지 작성
       case '/notice_write':
         return MaterialPageRoute(
@@ -69,41 +76,41 @@ class AppRouter {
           settings: settings,
         );
 
-// 커뮤니티 글 상세
-case '/community_detail':
-  {
-    final args = settings.arguments;
+      // 커뮤니티 글 상세
+      case '/community_detail':
+        {
+          final args = settings.arguments;
 
-    if (args is Map<String, dynamic>) {
-      final post = args['post'] as CommunityPost?;
-      // 💡 수정 1: 타입 캐스팅을 CommunityRepository 인터페이스로 변경
-      final repo = args['repo'] as CommunityRepository?; 
+          if (args is Map<String, dynamic>) {
+            final post = args['post'] as CommunityPost?;
+            // 💡 수정 1: 타입 캐스팅을 CommunityRepository 인터페이스로 변경
+            final repo = args['repo'] as CommunityRepository?;
 
-      if (post != null && repo != null) {
-        return MaterialPageRoute(
-          builder: (_) => CommunityDetailScreen(post: post, repo: repo),
-          settings: settings,
-        );
-      }
-    }
+            if (post != null && repo != null) {
+              return MaterialPageRoute(
+                builder: (_) => CommunityDetailScreen(post: post, repo: repo),
+                settings: settings,
+              );
+            }
+          }
 
-    // post만 넘어온 경우 방어 (repo가 누락된 경우)
-    if (args is CommunityPost) {
-      return MaterialPageRoute(
-        builder: (_) => CommunityDetailScreen(
-          post: args,
-          // 💡 수정 2: InMemoryCommunityRepository() 대신 Firestore 구현체 사용
-          repo: FirestoreCommunityRepository(), 
-        ),
-        settings: settings,
-      );
-    }
+          // post만 넘어온 경우 방어 (repo가 누락된 경우)
+          if (args is CommunityPost) {
+            return MaterialPageRoute(
+              builder: (_) => CommunityDetailScreen(
+                post: args,
+                // 💡 수정 2: InMemoryCommunityRepository() 대신 Firestore 구현체 사용
+                repo: FirestoreCommunityRepository(),
+              ),
+              settings: settings,
+            );
+          }
 
-    return MaterialPageRoute(
-      builder: (_) =>
-          const Scaffold(body: Center(child: Text('잘못된 커뮤니티 글 데이터입니다.'))),
-    );
-  }
+          return MaterialPageRoute(
+            builder: (_) =>
+                const Scaffold(body: Center(child: Text('잘못된 커뮤니티 글 데이터입니다.'))),
+          );
+        }
 
       default:
         return MaterialPageRoute(
