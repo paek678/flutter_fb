@@ -17,7 +17,15 @@ class CharacterSearchTab extends StatefulWidget {
   /// 필요하면 바깥에서 다른 구현체를 주입할 수도 있음
   final FirebaseCharacterRepository? repository;
 
-  const CharacterSearchTab({super.key, this.onTabChange, this.repository});
+  /// 🔹 추가: 초기 검색어
+  final String? initialQuery;
+
+  const CharacterSearchTab({
+    super.key,
+    this.onTabChange,
+    this.repository,
+    this.initialQuery,
+  });
 
   @override
   State<CharacterSearchTab> createState() => _CharacterSearchTabState();
@@ -58,9 +66,17 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   @override
   void initState() {
     super.initState();
-    // ⭐ 변경: 기본 구현체를 InMemory → Firebase로
-    _repository =
-        widget.repository ?? FirebaseCharacterRepository(); // ★ CHANGED
+
+    // ⭐ 기본 구현체를 InMemory → Firebase로
+    _repository = widget.repository ?? FirebaseCharacterRepository();
+
+    // 🔹 initialQuery가 있으면 검색창에 세팅
+    if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
+      _controller.text = widget.initialQuery!.trim();
+      // 필요하면 자동 검색까지 하고 싶으면 주석 해제
+      // _searchCharacter();
+    }
+
     _loadRanking(); // 시작 시 랭킹 한 번 불러오기
   }
 
@@ -68,7 +84,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final controller = DefaultTabController.of(context);
+    final controller = DefaultTabController.maybeOf(context); // ← 이게 되면 제일 깔끔
     if (controller != null && controller != _tabController) {
       _tabController?.removeListener(_onTabChanged);
       _tabController = controller;
@@ -220,7 +236,6 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
                       },
                       // ⭐ 추가: 랭킹 row 눌렀을 때 → characterId로 상세 조회 후 이동
                       onRowTap: (row) async {
-                        // ★ NEW
                         final character = await _repository.getCharacterById(
                           row.characterId,
                         );
