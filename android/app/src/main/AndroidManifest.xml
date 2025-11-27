@@ -3,6 +3,16 @@
         android:label="flutter_fb"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+    <meta-data
+        android:name="com.google.android.gms.credentials.API_ENABLED"
+        android:value="false" />
+    <meta-data
+        android:name="com.google.android.gms.credentials.CredentialPickerConfig"
+        android:value="false" />
+    <meta-data
+        android:name="androidx.credentials.CREDENTIAL_SERVICE_ENABLED"
+        android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
