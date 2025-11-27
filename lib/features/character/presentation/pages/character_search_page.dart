@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import '../../models/domain/character.dart';
 import '../../models/domain/ranking_row.dart';
 
-import '../../repository/character_repository.dart';
+import '../../repository/firebase_character_repository.dart';
 // ⭐ 추가: Firebase 구현체 import
-import '../../repository/firebase_character_repository.dart'; // ★ NEW
 
 import '../widgets/page_ranking_row.dart';
 import '../widgets/page_character_search_input.dart';
@@ -16,7 +15,7 @@ class CharacterSearchTab extends StatefulWidget {
   final void Function(int)? onTabChange;
 
   /// 필요하면 바깥에서 다른 구현체를 주입할 수도 있음
-  final CharacterRepository? repository;
+  final FirebaseCharacterRepository? repository;
 
   const CharacterSearchTab({super.key, this.onTabChange, this.repository});
 
@@ -39,7 +38,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
 
   TabController? _tabController;
 
-  late final CharacterRepository _repository;
+  late final FirebaseCharacterRepository _repository;
 
   @override
   bool get wantKeepAlive => false;

@@ -81,7 +81,7 @@ class CharacterCard extends StatelessWidget {
                 Image.asset('assets/images/fame.png', width: 16, height: 16),
                 const SizedBox(width: 4),
                 Text(
-                  c.fame,
+                  '${c.fame}',
                   style: AppTextStyles.body2.copyWith(
                     fontSize: 13,
                     color: AppColors.primaryText,

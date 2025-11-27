@@ -1,4 +1,4 @@
-// lib/features/character/models/character_stats.dart
+// lib/features/character/models/domain/character_stats.dart
 class CharacterStats {
   final double physicalDefenseRate;
   final double magicDefenseRate;
@@ -40,29 +40,56 @@ class CharacterStats {
     required this.darkElement,
   });
 
-  factory CharacterStats.fromJson(Map<String, dynamic> json) {
-    double _d(dynamic v) => (v ?? 0).toDouble();
-    int _i(dynamic v) => (v ?? 0).toInt();
+  /// ✅ 빈 값용 기본 생성자
+  const CharacterStats.empty()
+    : physicalDefenseRate = 0,
+      magicDefenseRate = 0,
+      str = 0,
+      intStat = 0,
+      vit = 0,
+      spi = 0,
+      physicalAttack = 0,
+      magicAttack = 0,
+      physicalCrit = 0,
+      magicCrit = 0,
+      independentAttack = 0,
+      adventureFame = 0,
+      attackSpeed = 0,
+      castSpeed = 0,
+      fireElement = 0,
+      waterElement = 0,
+      lightElement = 0,
+      darkElement = 0;
+
+  factory CharacterStats.fromStatusList(List<dynamic> statusList) {
+    // 이름으로 찾아서 value 꺼내는 헬퍼
+    num _find(String name) {
+      final found = statusList.cast<Map<String, dynamic>>().firstWhere(
+        (m) => m['name'] == name,
+        orElse: () => const {},
+      );
+      return found['value'] as num? ?? 0;
+    }
 
     return CharacterStats(
-      physicalDefenseRate: _d(json['physicalDefenseRate']),
-      magicDefenseRate: _d(json['magicDefenseRate']),
-      str: _i(json['str']),
-      intStat: _i(json['int']),
-      vit: _i(json['vit']),
-      spi: _i(json['spi']),
-      physicalAttack: _i(json['physicalAttack']),
-      magicAttack: _i(json['magicAttack']),
-      physicalCrit: _d(json['physicalCrit']),
-      magicCrit: _d(json['magicCrit']),
-      independentAttack: _i(json['independentAttack']),
-      adventureFame: _i(json['adventureFame']),
-      attackSpeed: _d(json['attackSpeed']),
-      castSpeed: _d(json['castSpeed']),
-      fireElement: _i(json['fireElement']),
-      waterElement: _i(json['waterElement']),
-      lightElement: _i(json['lightElement']),
-      darkElement: _i(json['darkElement']),
+      physicalDefenseRate: _find('물리 방어율').toDouble(),
+      magicDefenseRate: _find('마법 방어율').toDouble(),
+      str: _find('힘').toInt(),
+      intStat: _find('지능').toInt(),
+      vit: _find('체력').toInt(),
+      spi: _find('정신력').toInt(),
+      physicalAttack: _find('물리 공격력').toInt(),
+      magicAttack: _find('마법 공격력').toInt(),
+      physicalCrit: _find('물리 크리티컬').toDouble(),
+      magicCrit: _find('마법 크리티컬').toDouble(),
+      independentAttack: _find('독립 공격력').toInt(),
+      adventureFame: _find('모험가 명성').toInt(),
+      attackSpeed: _find('공격 속도').toDouble(),
+      castSpeed: _find('캐스팅 속도').toDouble(),
+      fireElement: _find('화속성 강화').toInt(),
+      waterElement: _find('수속성 강화').toInt(),
+      lightElement: _find('명속성 강화').toInt(),
+      darkElement: _find('암속성 강화').toInt(),
     );
   }
 }

@@ -21,6 +21,18 @@ class CharacterDetailStats {
     required this.totalCooldownReductionPercent,
   });
 
+  /// 🔹 빈 값용 기본 생성자
+  const CharacterDetailStats.empty()
+    : attackIncreaseFlat = 0,
+      attackIncreasePercent = 0,
+      buffPower = 0,
+      buffPowerPercent = 0,
+      finalDamagePercent = 0,
+      elementStackPercent = 0,
+      cooldownReductionPercent = 0,
+      cooldownRecoveryPercent = 0,
+      totalCooldownReductionPercent = 0;
+
   factory CharacterDetailStats.fromJson(Map<String, dynamic> json) {
     double _d(dynamic v) => (v ?? 0).toDouble();
     int _i(dynamic v) => (v ?? 0).toInt();

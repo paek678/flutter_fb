@@ -1,4 +1,4 @@
-// lib/features/character/models/detail_stat.dart
+// lib/features/character/models/ui/detail_stat.dart
 class DetailStat {
   final String name;
   final String value;

@@ -1,20 +1,21 @@
 // lib/features/character/presentation/views/character_detail_view.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_fb/core/theme/app_colors.dart';
 import 'package:flutter_fb/core/theme/app_text_styles.dart';
 
-// ✅ 기본 캐릭터 요약 정보
+// 기본 캐릭터 정보
 import 'package:flutter_fb/features/character/models/domain/character.dart';
+import 'package:flutter_fb/features/character/models/domain/character_info.dart';
+import 'package:flutter_fb/features/character/models/domain/character_detail_stats.dart';
+import 'package:flutter_fb/features/character/models/domain/character_stats.dart';
 
-// ⭐ 상세용 모델 & 레포지토리
-import 'package:flutter_fb/features/character/models/ui/character_detail.dart';
-import 'package:flutter_fb/features/character/repository/character_repository.dart';
+// 레포지토리
 import 'package:flutter_fb/features/character/repository/firebase_character_repository.dart';
 
-// 장비/슬롯 모델 추가 ★ NEW
-import 'package:flutter_fb/features/character/models/domain/equipment_item.dart';
+// 슬롯 모델
 import 'package:flutter_fb/features/character/models/ui/equipment_slot.dart';
+import 'package:flutter_fb/features/character/models/ui/avatar_creature_slot.dart';
+import 'package:flutter_fb/features/character/models/ui/buff_slot.dart';
 
 // 탭들
 import 'package:flutter_fb/features/character/presentation/widgets/detail_buff_tab.dart';
@@ -23,9 +24,6 @@ import '../widgets/detail_equipment_tab.dart';
 import '../widgets/detail_basic_stat_tab.dart';
 import '../widgets/detail_detail_stat_tab.dart';
 import '../widgets/detail_avatar_creature_tab.dart';
-// 상단 import 쪽에 추가
-import 'package:flutter_fb/features/character/models/ui/avatar_creature_slot.dart';
-import 'package:flutter_fb/features/character/models/ui/buff_slot.dart';
 
 class CharacterDetailView extends StatefulWidget {
   final Character character;
@@ -56,9 +54,10 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
     '스킬정보',
   ];
 
-  // ✅ 상세 데이터 & 레포지토리
-  late final CharacterRepository _repository;
-  CharacterDetail? _detail;
+  late final FirebaseCharacterRepository _repository;
+
+  /// 상세 정보가 채워진 Character
+  CharacterInfo? _detail;
   bool _loading = true;
   String? _error;
 
@@ -67,7 +66,7 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
   @override
   void initState() {
     super.initState();
-    _repository = FirebaseCharacterRepository();
+    _repository = const FirebaseCharacterRepository();
     _loadDetail();
   }
 
@@ -78,13 +77,23 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
     });
 
     try {
-      final detail = await _repository.getCharacterDetailById(
-        widget.character.id,
-      );
+      final info = await _repository.getCharacterInfoById(widget.character.id);
 
       if (!mounted) return;
+
+      // ✅ 상세가 없더라도, 최소한 빈 CharacterInfo 만들어서 탭은 뜨게 하기
+      final fallback = CharacterInfo(
+        summary: widget.character,
+        stats: const CharacterStats.empty(), // ✅ 이제 됨
+        detailStats: const CharacterDetailStats.empty(), // 이건 이미 있음
+        extraDetailStats: const [],
+        equipments: const [],
+        avatars: const [],
+        buffItems: const [],
+      );
+
       setState(() {
-        _detail = detail;
+        _detail = info ?? fallback;
         _loading = false;
       });
     } catch (e) {
@@ -99,7 +108,9 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final c = widget.character;
+
+    // 상단 프로필은 상세가 있으면 그걸, 아니면 기존 character 사용
+    final c = _detail?.summary ?? widget.character;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -121,7 +132,6 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
           _buildCharacterInfo(c),
           Divider(height: 1, color: AppColors.border),
 
-          // ✅ 상세 로딩 상태 처리
           if (_loading)
             const Expanded(child: Center(child: CircularProgressIndicator()))
           else if (_error != null || _detail == null)
@@ -197,7 +207,7 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      c.fame,
+                      '${c.fame}',
                       style: AppTextStyles.subtitle.copyWith(
                         color: AppColors.secondaryText,
                       ),
@@ -252,42 +262,38 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
   Widget _getTab(int i) {
     if (_builtTabs[i] != null) return _builtTabs[i]!;
 
-    // ✅ 여기서 _detail이 null일 일은 없음 (위에서 가드함)
-    final detail = _detail!;
+    final info = _detail!; // CharacterInfo
 
     switch (i) {
       case 0:
-        // 장착장비 탭: 장비 리스트 → 슬롯 리스트로 변환해서 넘기기 ★ CHANGED
-        final slots = buildSlotsFromItems(detail.equipments);
+        final slots = buildSlotsFromItems(info.equipments);
         _builtTabs[i] = EquipmentTab(slots: slots);
         break;
       case 1:
-        // 스탯 탭: BasicStat 리스트 넘기기
-        _builtTabs[i] = StatTab(stats: detail.basicStats);
+        _builtTabs[i] = StatTab(stats: info.stats); // CharacterStats
         break;
+
       case 2:
-        // 세부스탯 탭
         _builtTabs[i] = DetailStatTab(
-          detailStats: detail.detailStats,
-          extraStats: detail.extraDetailStats,
+          detailStats: info.detailStats,
+          extraStats: info.extraDetailStats,
         );
         break;
       case 3:
-        // 🔥 여기 수정: 아바타 리스트 → 슬롯 리스트 변환 후 전달
-        final avatarSlots = buildAvatarSlotsFromItems(detail.avatars);
+        final avatarSlots = buildAvatarSlotsFromItems(info.avatars);
         _builtTabs[i] = AvatarCreatureTab(slots: avatarSlots);
         break;
 
       case 4:
-        final buffSlots = buildBuffSlotsFromItems(detail.buffItems);
+        final buffSlots = buildBuffSlotsFromItems(info.buffItems);
         _builtTabs[i] = BuffTab(slots: buffSlots);
         break;
+
       case 5:
-        // 스킬 개화 (임시)
         _builtTabs[i] = const SkillBloomTab();
         break;
+
       default:
-        // 6: 딜표, 7: 스킬정보 → 지금은 더미 텍스트
         _builtTabs[i] = Center(
           child: Text(
             i == 6 ? '딜표 데이터 (추후 연동)' : '스킬 정보 (추후 연동)',

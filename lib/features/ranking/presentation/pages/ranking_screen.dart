@@ -130,14 +130,7 @@ class _RankingScreenState extends State<RankingScreen> {
                         characterMap['image'] as String? ??
                         'assets/images/character1.png',
                     fame:
-                        (characterMap['power'] ?? characterMap['score'] ?? '0')
-                            .toString(),
-                    stats: null,
-                    detailStats: null, 
-                    equipments: [], 
-                    avatars: [], 
-                    buffItems: [], 
-                    rankingHistory: [],
+                        (characterMap['power'] ?? characterMap['score'] ?? '0'),
                   );
 
                   Navigator.push(
