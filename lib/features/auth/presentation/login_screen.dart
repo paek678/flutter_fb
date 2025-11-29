@@ -38,42 +38,45 @@ class _LoginScreenState extends State<LoginScreen> {
       '800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com';
 
   Future<void> _onGoogleLogin() async {
-    // 데스크톱/Web에서 눌렀을 때는 막기 (선택 사항)
+    // 데스크톱 / Web 에서 호출되는 건 막기 (선택 사항)
     if (!Platform.isAndroid && !Platform.isIOS) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google 로그인은 모바일(Android/iOS)에서만 지원됩니다.')),
+        const SnackBar(
+          content: Text('Google 로그인은 모바일(Android/iOS)에서만 지원됩니다.'),
+        ),
       );
       return;
     }
 
     try {
-      // 🔹 0) serverClientId로 GoogleSignIn 초기화 (★ 새로 추가된 부분)
+      // 0) serverClientId 로 GoogleSignIn 초기화 (최신 버전에서 권장)
       await GoogleSignIn.instance.initialize(serverClientId: _webClientId);
 
       // 1) Google Sign-In 플로우 시작
-      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance
-          .authenticate();
+      final GoogleSignInAccount? googleUser =
+          await GoogleSignIn.instance.authenticate();
 
       if (googleUser == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Google 로그인 취소됨')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Google 로그인 취소됨')),
+        );
         return;
       }
 
-      // 2) 토큰 가져오기 (여기서는 authentication 에서 idToken 사용)
-      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+      // 2) 토큰 가져오기 (여기서는 authentication 에서 idToken만 사용)
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
-        // accessToken은 Firebase 로그인만 쓸 거면 굳이 없어도 됨
+        // accessToken은 Firebase 로그인만 할 거면 굳이 필요 없음
       );
 
       // 3) Firebase Auth 로그인
-      final UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithCredential(credential);
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
 
       final User? user = userCredential.user;
       if (user == null) {
@@ -99,10 +102,12 @@ class _LoginScreenState extends State<LoginScreen> {
           lastActionAt: now,
         );
         await FirestoreService.createUser(newUser);
+        FirestoreService.setCurrentUser(newUser);
       } else {
         // 기존 유저면 마지막 로그인 시간만 갱신
         final updated = existing.copyWith(lastLoginAt: now);
         await FirestoreService.updateUser(updated);
+        FirestoreService.setCurrentUser(updated);
       }
 
       if (!mounted) return;
@@ -113,14 +118,14 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[Google Login Error] $e\n$st');
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Google 로그인 중 오류 발생: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google 로그인 중 오류 발생: $e')),
+      );
     }
   }
 
   void _onGuestLogin() {
-    // 🔹 게스트 팝업 화면으로 이동 (이제 /home 말고 /guest_login 으로 감)
+    // 🔹 게스트 팝업 화면으로 이동 (현재 /home 말고 /guest_login 으로 감)
     Navigator.pushNamed(context, '/guest_login');
   }
 
@@ -137,16 +142,21 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 로고/타이틀
+              // 로고 / 타이틀
               Text(
                 '로그인',
                 textAlign: TextAlign.center,
-                style: AppTextStyles.h1.copyWith(color: AppColors.primaryText),
+                style: AppTextStyles.h1.copyWith(
+                  color: AppColors.primaryText,
+                ),
               ),
               const SizedBox(height: AppSpacing.xl),
 
               // 이메일 입력
-              CustomTextField(hintText: '이메일 주소', controller: _emailController),
+              CustomTextField(
+                hintText: '이메일 주소',
+                controller: _emailController,
+              ),
               const SizedBox(height: AppSpacing.md),
 
               // 비밀번호 입력 (지금 CustomTextField에 obscureText가 없으니 그대로 사용)
@@ -157,7 +167,10 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: AppSpacing.lg),
 
               // 기본 로그인 버튼
-              PrimaryButton(text: '로그인', onPressed: _onLogin),
+              PrimaryButton(
+                text: '로그인',
+                onPressed: _onLogin,
+              ),
 
               const SizedBox(height: AppSpacing.md),
 
@@ -239,16 +252,24 @@ class _LoginScreenState extends State<LoginScreen> {
     return Row(
       children: [
         Expanded(
-          child: Container(height: 1, color: AppColors.border.withOpacity(0.6)),
+          child: Container(
+            height: 1,
+            color: AppColors.border.withOpacity(0.6),
+          ),
         ),
         const SizedBox(width: 8),
         Text(
           text,
-          style: AppTextStyles.caption.copyWith(color: AppColors.secondaryText),
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.secondaryText,
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Container(height: 1, color: AppColors.border.withOpacity(0.6)),
+          child: Container(
+            height: 1,
+            color: AppColors.border.withOpacity(0.6),
+          ),
         ),
       ],
     );

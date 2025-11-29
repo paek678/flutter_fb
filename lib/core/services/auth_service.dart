@@ -11,7 +11,7 @@ class AuthService {
 
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// google-services.json 에 있는 web client (client_type: 3)
+  /// google-services.json 에 있는 Web client (client_type: 3)
   static const String _webClientId =
       '800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com';
 
@@ -23,12 +23,12 @@ class AuthService {
 
   // ---------------------------------------------------------------------------
   // 1) Google 로그인 + users 컬렉션 동기화
-  //    - uid 기반 검색 → 없으면 AppUser 생성 → 있으면 lastLoginAt 갱신
+  //    - uid 기반 조회해서 AppUser 생성 또는 lastLoginAt 갱신
   //    - 최종적으로 AppUser 리턴
   // ---------------------------------------------------------------------------
 
   static Future<AppUser> signInWithGoogle() async {
-    // 모바일만 지원 (원하면 Platform 분기 빼도 됨)
+    // 모바일에서만 제한 (원하면 Platform 분기 빼도 됨)
     if (!Platform.isAndroid && !Platform.isIOS) {
       throw Exception('Google 로그인은 Android / iOS 에서만 지원됩니다.');
     }
@@ -43,7 +43,7 @@ class AuthService {
         await GoogleSignIn.instance.authenticate();
 
     if (googleUser == null) {
-      // 사용자가 취소
+      // 사용자가 취소한 경우
       throw Exception('사용자가 Google 로그인을 취소했습니다.');
     }
 
@@ -82,18 +82,20 @@ class AuthService {
         lastActionAt: now,
       );
       await FirestoreService.createUser(newUser);
+      FirestoreService.setCurrentUser(newUser);
       return newUser;
     } else {
       final updated = existing.copyWith(lastLoginAt: now);
       await FirestoreService.updateUser(updated);
+      FirestoreService.setCurrentUser(updated);
       return updated;
     }
   }
 
   // ---------------------------------------------------------------------------
   // 2) 게스트 로그인 (익명 Auth + users 컬렉션에 guest 유저 생성)
-  //    - 이미 익명 계정 있으면 그대로 사용
-  //    - 필요 없으면 그냥 Navigator 로 팝업만 띄우는 용도로 안 써도 됨
+  //    - 이미 익명 계정이 있으면 그것을 재사용
+  //    - 필요 없으면 그냥 Navigator 쪽에서만 팝업/화면을 닫아도 됨
   // ---------------------------------------------------------------------------
 
   static Future<AppUser> signInAsGuest() async {
@@ -126,10 +128,12 @@ class AuthService {
         lastActionAt: now,
       );
       await FirestoreService.createUser(guest);
+      FirestoreService.setCurrentUser(guest);
       return guest;
     } else {
       final updated = existing.copyWith(lastLoginAt: now);
       await FirestoreService.updateUser(updated);
+      FirestoreService.setCurrentUser(updated);
       return updated;
     }
   }
@@ -141,7 +145,8 @@ class AuthService {
   static Future<void> signOut() async {
     await Future.wait([
       _auth.signOut(),
-     GoogleSignIn.instance.signOut(), // ✅ 싱글톤 인스턴스 사용
+      GoogleSignIn.instance.signOut(), // 현재 Google 계정 세션도 로그아웃
     ]);
+    FirestoreService.setCurrentUser(null);
   }
 }

@@ -36,6 +36,15 @@ class FirestoreService {
   FirestoreService._();
 
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
+  static AppUser? _currentUser;
+
+  /// 캐싱된 현재 AppUser (Auth 연동 시 세팅).
+  static AppUser? get currentUser => _currentUser;
+
+  /// 로그인/로그아웃 시점에 현재 AppUser를 기록/해제한다.
+  static void setCurrentUser(AppUser? user) {
+    _currentUser = user;
+  }
 
   // ---------------------------------------------------------------------------
   // 1) Notice

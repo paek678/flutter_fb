@@ -148,6 +148,11 @@ AppUser appUserFromFirestoreDoc(
   final Timestamp? tsCreated = data['created_at'] as Timestamp?;
   final Timestamp? tsLastLogin = data['last_login_at'] as Timestamp?;
   final Timestamp? tsLastAction = data['last_action_at'] as Timestamp?;
+  final List<dynamic> favRaw = data['favorites'] as List<dynamic>? ?? const [];
+  final Set<int> favorites = favRaw
+      .whereType<num>()
+      .map((e) => e.toInt())
+      .toSet();
 
   final DateTime createdAt =
       tsCreated != null ? tsCreated.toDate() : DateTime.now();
@@ -163,6 +168,7 @@ AppUser appUserFromFirestoreDoc(
     createdAt: createdAt,
     lastLoginAt: lastLoginAt,
     lastActionAt: lastActionAt,
+    favorites: favorites,
   );
 }
 
@@ -427,5 +433,6 @@ Map<String, dynamic> appUserToFirestoreMap(AppUser u) {
     'created_at': u.createdAt,
     'last_login_at': u.lastLoginAt,
     'last_action_at': u.lastActionAt,
+    'favorites': u.favorites.toList(),
   };
 }

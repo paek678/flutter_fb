@@ -9,6 +9,7 @@ class AppUser {
   final DateTime createdAt;
   final DateTime? lastLoginAt;
   final DateTime? lastActionAt;
+  final Set<int> favorites; // 찜한 auction item ids
 
   const AppUser({
     required this.uid,
@@ -19,6 +20,7 @@ class AppUser {
     required this.createdAt,
     this.lastLoginAt,
     this.lastActionAt,
+    this.favorites = const <int>{},
   });
 
   AppUser copyWith({
@@ -30,6 +32,7 @@ class AppUser {
     DateTime? createdAt,
     DateTime? lastLoginAt,
     DateTime? lastActionAt,
+    Set<int>? favorites,
   }) {
     return AppUser(
       uid: uid ?? this.uid,
@@ -40,6 +43,7 @@ class AppUser {
       createdAt: createdAt ?? this.createdAt,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
       lastActionAt: lastActionAt ?? this.lastActionAt,
+      favorites: favorites ?? this.favorites,
     );
   }
 
@@ -65,7 +69,18 @@ class AppUser {
       createdAt: parseDate('createdAt'),
       lastLoginAt: parseDateOrNull('lastLoginAt'),
       lastActionAt: parseDateOrNull('lastActionAt'),
+      favorites: _parseFavorites(json['favorites']),
     );
+  }
+
+  static Set<int> _parseFavorites(dynamic raw) {
+    if (raw is List) {
+      return raw
+          .whereType<num>()
+          .map((e) => e.toInt())
+          .toSet();
+    }
+    return const <int>{};
   }
 
   Map<String, dynamic> toJson() => {
@@ -77,5 +92,6 @@ class AppUser {
         'createdAt': createdAt.toIso8601String(),
         'lastLoginAt': lastLoginAt?.toIso8601String(),
         'lastActionAt': lastActionAt?.toIso8601String(),
+        'favorites': favorites.toList(),
       };
 }
