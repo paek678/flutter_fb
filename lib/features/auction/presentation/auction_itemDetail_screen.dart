@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/services/firebase_service.dart';
 
 import '../models/auction_item.dart';
 import '../models/auction_item_data.dart' as src;
@@ -18,26 +19,26 @@ class AuctionItemDetailScreen extends StatefulWidget {
 
 class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
   bool _isFavorite = false;
-  bool _initializedFavorite = false; // ✅ item.isFavorite에서 한 번만 복사하기 위한 플래그
+  bool _initializedFavorite = false; // 첫 build 때 한 번만 item.isFavorite 값을 state로 복사하기 위한 플래그
 
-  // 싱글톤 레포 인스턴스 (factory InMemoryAuctionRepository() 사용)
+  // 즐겨찾기 테스트용 인메모리 리포지토리 (factory InMemoryAuctionRepository() 사용)
   final InMemoryAuctionRepository _repo = InMemoryAuctionRepository();
 
   @override
   Widget build(BuildContext context) {
     final Map<String, dynamic> j =
         (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ??
-        {};
+            {};
 
     final item = AuctionItem.fromJson(j);
 
-    // ✅ 첫 빌드에서만 item.isFavorite 값을 내부 state로 복사
+    // 최초 빌드에서만 item.isFavorite 값을 state로 복사
     if (!_initializedFavorite) {
       _isFavorite = item.isFavorite;
       _initializedFavorite = true;
     }
 
-    // 이름으로 상세 데이터(레벨/공격/옵션/시세 등) 매칭
+    // 이름 기준으로 정적 소스 아이템 한 번 더 찾아서 (희귀도/상세 정보 등) 묶어 사용
     final srcItem = src.kAuctionItems.cast<src.AuctionItem?>().firstWhere(
       (e) => e?.name == item.name,
       orElse: () => null,
@@ -59,7 +60,7 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // ── 상단 헤더: 이미지 + 기본 정보 + 좋아요
+              // 상단 요약 헤더: 썸네일 + 기본 정보 + 즐겨찾기 버튼
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                 child: Row(
@@ -73,13 +74,7 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
                         price: item.price,
                         rarityLabel: srcItem?.rarity,
                         isFavorite: _isFavorite,
-                        onFavoriteToggle: () async {
-                          // 싱글톤 레포로 찜 토글 + 로컬 UI 상태 토글
-                          await _repo.toggleFavorite(item.id);
-                          setState(() {
-                            _isFavorite = !_isFavorite;
-                          });
-                        },
+                        onFavoriteToggle: () => _toggleFavoriteForUser(item),
                       ),
                     ),
                   ],
@@ -88,7 +83,7 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
 
               const Divider(height: 1, color: AppColors.border),
 
-              // ── 탭바 (시세 / 상세정보)
+              // 상단 탭 (시세 / 상세 정보)
               Container(
                 color: AppColors.surface,
                 child: const TabBar(
@@ -107,21 +102,21 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
                   ),
                   tabs: [
                     Tab(text: '시세'),
-                    Tab(text: '상세정보'),
+                    Tab(text: '상세 정보'),
                   ],
                 ),
               ),
 
               const Divider(height: 1, color: AppColors.border),
 
-              // ── 탭 내용
+              // 탭 내용
               Expanded(
                 child: TabBarView(
                   children: [
                     // 1) 시세 탭
                     _PriceTab(srcItem: srcItem),
 
-                    // 2) 상세정보 탭
+                    // 2) 상세 정보 탭
                     _DetailTab(item: item, srcItem: srcItem),
                   ],
                 ),
@@ -131,6 +126,45 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _toggleFavoriteForUser(AuctionItem item) async {
+    final current = FirestoreService.currentUser;
+    if (current == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 후 즐겨찾기를 사용할 수 있습니다.')),
+      );
+      return;
+    }
+
+    final updatedFavorites = Set<int>.from(current.favorites);
+    final wasFavorite = updatedFavorites.contains(item.id);
+    if (wasFavorite) {
+      updatedFavorites.remove(item.id);
+    } else {
+      updatedFavorites.add(item.id);
+    }
+
+    final updatedUser = current.copyWith(
+      favorites: updatedFavorites,
+      lastActionAt: DateTime.now(),
+    );
+
+    try {
+      await FirestoreService.updateUser(updatedUser);
+      FirestoreService.setCurrentUser(updatedUser);
+      await _repo.toggleFavorite(item.id);
+      if (!mounted) return;
+      setState(() {
+        _isFavorite = !wasFavorite;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('즐겨찾기 업데이트 실패: $e')),
+      );
+    }
   }
 
   Widget _thumb(String? path) {
@@ -165,15 +199,15 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
   }
 }
 
-/// ─────────────────────────────────────────────
-/// 시세 탭: 차트 + 최종 판매가 리스트
-/// ─────────────────────────────────────────────
+/// ---------------------------------------------------------------------------
+/// 시세 탭: 라인 차트 + 최근 일별 내역 리스트
+/// ---------------------------------------------------------------------------
 class _PriceTab extends StatelessWidget {
   final src.AuctionItem? srcItem;
 
   const _PriceTab({required this.srcItem});
 
-  // data의 d7 시리즈를 "최근 7일"로 매핑
+  // data에서 최근 7일 시세만 사용
   List<(DateTime date, double price)> _buildWeekPoints(src.AuctionItem s) {
     final series = src.fullSeriesOf(s, src.PriceRange.d7);
     if (series.isEmpty) return const [];
@@ -183,7 +217,7 @@ class _PriceTab extends StatelessWidget {
     final len = series.length;
 
     return List.generate(len, (i) {
-      final offset = len - 1 - i; // 오래된 값이 과거 날짜
+      final offset = len - 1 - i; // 리스트 뒤가 오늘 기준
       final date = base.subtract(Duration(days: offset));
       return (date, series[i].toDouble());
     });
@@ -212,7 +246,7 @@ class _PriceTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '아이템 시세',
+            '가격 추이 (시세)',
             style: AppTextStyles.body1.copyWith(
               fontWeight: FontWeight.w700,
               color: AppColors.primaryText,
@@ -220,14 +254,14 @@ class _PriceTab extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '최근 7일 기준 시세',
+            '최근 7일간 시세',
             style: AppTextStyles.caption.copyWith(
               color: AppColors.secondaryText,
             ),
           ),
           const SizedBox(height: 12),
 
-          // 차트 카드
+          // 라인 차트 카드
           Container(
             height: 220,
             decoration: BoxDecoration(
@@ -246,16 +280,16 @@ class _PriceTab extends StatelessWidget {
                     ),
                   )
                 : PriceLineChartFirst5(
-                    points: weekPoints, // 여기서 points 전달
+                    points: weekPoints,
                     backgroundColor: AppColors.surface,
                   ),
           ),
 
           const SizedBox(height: 16),
 
-          // 최종 판매가 리스트
+          // 일자별 시세 리스트
           Text(
-            '최종 판매가',
+            '최근 일별 시세',
             style: AppTextStyles.body1.copyWith(
               fontWeight: FontWeight.w700,
               color: AppColors.primaryText,
@@ -270,7 +304,7 @@ class _PriceTab extends StatelessWidget {
             ),
             child: Column(
               children: weekPoints
-                  .reversed // 최근 날짜부터
+                  .reversed // 최신 날짜가 위로 오도록 역순
                   .map(
                     (p) => Padding(
                       padding: const EdgeInsets.symmetric(
@@ -311,9 +345,9 @@ class _PriceTab extends StatelessWidget {
   }
 }
 
-/// ─────────────────────────────────────────────
-/// 상세정보 탭
-/// ─────────────────────────────────────────────
+/// ---------------------------------------------------------------------------
+/// 상세 정보 탭
+/// ---------------------------------------------------------------------------
 class _DetailTab extends StatelessWidget {
   final AuctionItem item;
   final src.AuctionItem? srcItem;
@@ -327,17 +361,17 @@ class _DetailTab extends StatelessWidget {
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          _SectionTitle('세부 정보'),
+          _SectionTitle('기본 정보'),
           const SizedBox(height: 8),
           _KeyValueCard(
             entries: [
-              if (s.type.isNotEmpty) ('종류', '${s.type} / ${s.subType}'),
+              if (s.type.isNotEmpty) ('장비 종류', '${s.type} / ${s.subType}'),
               ('등급', s.rarity),
-              ('요구 레벨', '${s.levelLimit}'),
+              ('착용 레벨', '${s.levelLimit}'),
               ('지능', '${s.intelligence}'),
               ('전투력', '${s.combatPower}'),
               if (s.weightKg != null) ('무게(kg)', '${s.weightKg}'),
-              if (s.durability != null) ('내구도', s.durability!),
+              if (s.durability != null) ('내구도', '${s.durability}'),
             ],
           ),
 
@@ -346,9 +380,9 @@ class _DetailTab extends StatelessWidget {
           const SizedBox(height: 8),
           _KeyValueCard(
             entries: [
-              ('물리', '${s.attack.physical}'),
-              ('마법', '${s.attack.magical}'),
-              ('독립', '${s.attack.independent}'),
+              ('물리 공격력', '${s.attack.physical}'),
+              ('마법 공격력', '${s.attack.magical}'),
+              ('독립 공격력', '${s.attack.independent}'),
             ],
           ),
 
@@ -362,11 +396,11 @@ class _DetailTab extends StatelessWidget {
       );
     }
 
-    // srcItem 없을 때: 최소 정보만
+    // srcItem 이 없을 때는 최소한의 정보만 보여줌
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        _SectionTitle('세부 정보'),
+        _SectionTitle('기본 정보'),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -388,9 +422,9 @@ class _DetailTab extends StatelessWidget {
   }
 }
 
-/// ─────────────────────────────────────────────
-/// 서브 위젯들
-/// ─────────────────────────────────────────────
+/// ---------------------------------------------------------------------------
+/// 상단 기본 정보 카드
+/// ---------------------------------------------------------------------------
 class _BasicInfo extends StatelessWidget {
   final String name;
   final int price;
@@ -408,7 +442,7 @@ class _BasicInfo extends StatelessWidget {
 
   Color _rarityColor(String label) {
     if (label.contains('레전더리')) return const Color(0xFFFF9800);
-    if (label.contains('유니크')) return const Color(0xFFAB47BC);
+    if (label.contains('에픽')) return const Color(0xFFAB47BC);
     if (label.contains('레어')) return const Color(0xFF42A5F5);
     return AppColors.secondaryText;
   }
@@ -484,7 +518,7 @@ class _BasicInfo extends StatelessWidget {
           ),
         ),
 
-        // 오른쪽: 좋아요 하트
+        // 오른쪽: 즐겨찾기 버튼
         IconButton(
           onPressed: onFavoriteToggle,
           icon: Icon(
@@ -594,7 +628,7 @@ class _OptionList extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '•  ',
+                        '• ',
                         style: TextStyle(color: AppColors.secondaryText),
                       ),
                       Expanded(
