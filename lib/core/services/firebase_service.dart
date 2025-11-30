@@ -205,8 +205,12 @@ class FirestoreService {
         .orderBy('created_at', descending: true)
         .limit(limit)
         .get();
-
-    return commentsFromQuerySnapshot(snap);
+    return snap.docs
+        .map(
+          (doc) => commentFromFirestoreDoc(doc)
+              .copyWith(docId: doc.id, postDocId: postDocId),
+        )
+        .toList();
   }
 
   static Future<CommunityComment?> getCommentById(

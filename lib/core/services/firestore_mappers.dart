@@ -96,6 +96,7 @@ CommunityPost communityPostFromFirestoreDoc(
 
   return CommunityPost(
     id: id,
+    docId: doc.id, // Firestore 문서 ID를 모델에 주입해 후속 호출에서 사용
     title: title,
     content: content,
     author: author,

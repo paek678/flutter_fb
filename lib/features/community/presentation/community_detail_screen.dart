@@ -463,12 +463,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildCommentActionPill(
-                  label: '수정',
-                  icon: Icons.edit_outlined,
-                  onTap: () => _editComment(c),
-                ),
-                const SizedBox(width: 6),
-                _buildCommentActionPill(
                   label: '삭제',
                   icon: Icons.delete_outline,
                   onTap: () async {

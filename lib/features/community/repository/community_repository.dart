@@ -121,7 +121,7 @@ class FirestoreCommunityRepository implements CommunityRepository {
     );
     
     // 추가된 댓글 객체에 실제 docId를 반영하여 반환 (CommunityComment 모델에 docId 필드가 있다고 가정)
-    return newComment.copyWith(docId: commentDocId);
+    return newComment.copyWith(docId: commentDocId, postDocId: postDocId);
   }
 
   @override
