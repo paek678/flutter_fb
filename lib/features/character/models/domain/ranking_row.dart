@@ -9,6 +9,8 @@ class RankingRow {
   final String name;
   final int fame;
   final String job;
+  final String jobGrowName;
+  final int level;
   final String imagePath;
 
   const RankingRow({
@@ -19,6 +21,8 @@ class RankingRow {
     required this.name,
     required this.fame,
     required this.job,
+    required this.jobGrowName,
+    required this.level,
     required this.imagePath,
   });
 
@@ -30,6 +34,8 @@ class RankingRow {
     String? name,
     int? fame,
     String? job,
+    String? jobGrowName,
+    int? level,
     String? imagePath,
   }) {
     return RankingRow(
@@ -40,6 +46,8 @@ class RankingRow {
       name: name ?? this.name,
       fame: fame ?? this.fame,
       job: job ?? this.job,
+      jobGrowName: jobGrowName ?? this.jobGrowName,
+      level: level ?? this.level,
       imagePath: imagePath ?? this.imagePath,
     );
   }
@@ -52,7 +60,9 @@ class RankingRow {
       rank: (json['rank'] as num?)?.toInt() ?? 0,
       name: json['name'] as String? ?? '',
       fame: (json['fame'] as num?)?.toInt() ?? 0,
-      job: json['job'] as String? ?? '',
+      job: json['job'] as String? ?? json['jobName'] as String? ?? '',
+      jobGrowName: json['jobGrowName'] as String? ?? '',
+      level: (json['level'] as num?)?.toInt() ?? 0,
       imagePath: json['imagePath'] as String? ?? '',
     );
   }
@@ -66,6 +76,8 @@ class RankingRow {
       'name': name,
       'fame': fame,
       'job': job,
+      'jobGrowName': jobGrowName,
+      'level': level,
       'imagePath': imagePath,
     };
   }

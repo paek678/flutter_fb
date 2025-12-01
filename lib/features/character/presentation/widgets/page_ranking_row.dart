@@ -143,7 +143,7 @@ class RankingTableContainer extends StatelessWidget {
                           ),
                           Expanded(
                             flex: 2,
-                            child: Text(
+                          child: Text(
                               '${row.fame}', // ✅ 명성
                               style: AppTextStyles.body2.copyWith(
                                 color: AppColors.secondaryText,
@@ -153,9 +153,11 @@ class RankingTableContainer extends StatelessWidget {
                           Expanded(
                             flex: 3,
                             child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                row.job,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                                row.jobGrowName.isNotEmpty
+                                    ? row.jobGrowName
+                                    : row.job,
                                 style: AppTextStyles.body2.copyWith(
                                   color: AppColors.secondaryText,
                                 ),

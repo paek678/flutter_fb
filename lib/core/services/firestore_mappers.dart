@@ -191,6 +191,8 @@ RankingRow rankingRowFromFirestoreDoc(
     name: (data['name'] ?? '') as String,
     fame: (data['fame'] as num?)?.toInt() ?? 0,
     job: (data['job'] ?? '') as String,
+    jobGrowName: (data['jobGrowName'] ?? '') as String,
+    level: (data['level'] as num?)?.toInt() ?? 0,
     imagePath: (data['imagePath'] ?? '') as String,
   );
 }

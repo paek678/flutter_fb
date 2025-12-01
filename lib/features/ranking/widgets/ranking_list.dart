@@ -66,12 +66,9 @@ class RankingList extends StatelessWidget {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(6),
-                            child: Image.asset(
-                              character['image'] ??
-                                  'assets/images/no_image.png',
-                              width: 44,
-                              height: 44,
-                              fit: BoxFit.cover,
+                            child: _buildCharacterImage(
+                              character['image'] as String?,
+                              size: 44,
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -100,11 +97,10 @@ class RankingList extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                    Image.asset(
-                                      'assets/images/fame.png',
-                                      width: 16,
-                                      height: 16,
-                                    ),
+                                _buildCharacterImage(
+                                  character['image'] as String?,
+                                  size: 16,
+                                ),
                                     const SizedBox(width: 4),
                                     Text(
                                       character['power'] ?? '-',
@@ -129,6 +125,34 @@ class RankingList extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildCharacterImage(String? imagePath, {double size = 44}) {
+    final fallback = Image.asset(
+      'assets/images/no_image.png',
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+    );
+
+    if (imagePath == null || imagePath.isEmpty) return fallback;
+
+    if (imagePath.startsWith('http')) {
+      return Image.network(
+        imagePath,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      );
+    }
+
+    return Image.asset(
+      imagePath,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
     );
   }
 }

@@ -62,6 +62,13 @@ class _RankingScreenState extends State<RankingScreen> {
         sortedByFame.length,
         (i) => sortedByFame[i].copyWith(rank: i + 1),
       );
+      // Debug: incoming ranking rows snapshot (전체 출력)
+      debugPrint('[RankingScreen] fetched ${ranked.length} rows (server=$_selectedServer)');
+      for (final row in ranked) {
+        debugPrint(
+          ' - #${row.rank} ${row.name} / ${row.jobGrowName} / ${row.serverId} fame=${row.fame} level=${row.level} image=${row.imagePath}',
+        );
+      }
       if (!mounted) return;
       setState(() {
         _rankingRows = ranked;
@@ -110,8 +117,7 @@ class _RankingScreenState extends State<RankingScreen> {
                 onAwakeningSelected: _onAwakeningSelected,
               ),
             const SizedBox(height: AppSpacing.md),
-            if (_selectedJob != null && _selectedAwakening != null)
-              _buildRankingSection(),
+            _buildRankingSection(),
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
@@ -124,6 +130,23 @@ class _RankingScreenState extends State<RankingScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // 선택된 서버/직업/각성에 맞춰 필터링 (선택 안 하면 전체 표시)
+    final selectedServerId = _serverIdFromName(_selectedServer);
+    final filteredRows = _rankingRows.where((row) {
+      if (selectedServerId != null && row.serverId != selectedServerId) {
+        return false;
+      }
+      if (_selectedJob != null && row.job != _selectedJob) {
+        return false;
+      }
+      if (_selectedAwakening != null &&
+          _selectedAwakening!.isNotEmpty &&
+          row.jobGrowName != _selectedAwakening) {
+        return false;
+      }
+      return true;
+    }).toList();
+
     if (_error != null) {
       return Center(
         child: Text(
@@ -133,7 +156,7 @@ class _RankingScreenState extends State<RankingScreen> {
       );
     }
 
-    if (_rankingRows.isEmpty) {
+    if (filteredRows.isEmpty) {
       return const Center(
         child: Text(
           '랭킹 데이터가 없습니다.',
@@ -142,24 +165,27 @@ class _RankingScreenState extends State<RankingScreen> {
       );
     }
 
+    final rankingData = List.generate(filteredRows.length, (i) {
+      final row = filteredRows[i];
+      return {
+        'rank': i + 1, // 화면에는 순차 번호로 표시
+        'name': row.name,
+        'class': row.jobGrowName.isNotEmpty ? row.jobGrowName : row.job,
+        'server': _serverNameFromId(row.serverId),
+        'level': row.level,
+        'power': row.fame.toString(),
+        'image': row.imagePath.isNotEmpty
+            ? row.imagePath
+            : 'assets/images/character1.png',
+        'characterId': row.characterId,
+        'id': row.id,
+      };
+    });
+
     return RankingList(
-      job: _selectedJob!,
-      awakening: _selectedAwakening!,
-      rankingData: _rankingRows
-          .map((row) => {
-                'rank': row.rank,
-                'name': row.name,
-                'class': row.job,
-                'server': _serverNameFromId(row.serverId),
-                'level': 0,
-                'power': row.fame.toString(),
-                'image': row.imagePath.isNotEmpty
-                    ? row.imagePath
-                    : 'assets/images/character1.png',
-                'characterId': row.characterId,
-                'id': row.id,
-              })
-          .toList(),
+      job: _selectedJob ?? '전체',
+      awakening: _selectedAwakening ?? '전체',
+      rankingData: rankingData,
       onTapCharacter: (characterMap) {
         final fameRaw = characterMap['power'] ?? characterMap['score'] ?? '0';
         final fame = int.tryParse('$fameRaw') ?? 0;
@@ -190,13 +216,15 @@ class _RankingScreenState extends State<RankingScreen> {
 
   void _onJobSelected(String job) {
     setState(() {
-      _selectedJob = job;
+      // "전체" 선택 시 필터 해제
+      _selectedJob = job == '전체' ? null : job;
       _selectedAwakening = null;
     });
   }
 
   void _onAwakeningSelected(String aw) {
-    setState(() => _selectedAwakening = aw);
+    // "전체" 선택 시 필터 해제
+    setState(() => _selectedAwakening = aw == '전체' ? null : aw);
   }
 
   String? _serverIdFromName(String name) {

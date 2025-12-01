@@ -447,6 +447,8 @@ class FirestoreService {
         name: data['name'] as String,
         fame: (data['fame'] as num).toInt(),
         job: data['job'] as String,
+        jobGrowName: (data['jobGrowName'] ?? data['job'] ?? '') as String,
+        level: (data['level'] as num?)?.toInt() ?? 0,
         imagePath: (data['imagePath'] ?? '') as String,
       );
     });
@@ -459,18 +461,94 @@ class FirestoreService {
     String? serverId,
     int? limit,
   }) async {
-    Query<Map<String, dynamic>> query =
-        _db.collectionGroup('ranking_rows');
+    // ranking_rows 문서에 serverId가 없는 경우가 있어 부모 캐릭터에서 보충해야 하므로
+    // collectionGroup where 필터를 걸지 않고 전부 가져온 뒤 애플리케이션 레벨에서 필터링한다.
+    Query<Map<String, dynamic>> query = _db.collectionGroup('ranking_rows');
 
-    if (serverId != null) {
-      query = query.where('serverId', isEqualTo: serverId);
-    }
     if (limit != null) {
       query = query.limit(limit);
     }
 
     final snap = await query.get();
-    return rankingRowsFromQuerySnapshot(snap);
+    final docs = snap.docs;
+
+    // ranking_rows 서브컬렉션에 imagePath가 없을 수 있어서
+    // 부모 character 문서의 imagePath를 fallback으로 가져온다.
+    final rows = await Future.wait(docs.map((doc) async {
+      final base = rankingRowFromFirestoreDoc(doc);
+
+      String imagePath = base.imagePath;
+      String jobGrowName = base.jobGrowName;
+      String job = base.job;
+      int level = base.level;
+      String server = base.serverId;
+
+      // ranking_rows에 없으면 부모 character 문서/서브컬렉션에서 보충
+      if (imagePath.isEmpty ||
+          jobGrowName.isEmpty ||
+          job.isEmpty ||
+          level == 0 ||
+          server.isEmpty) {
+        final parentCharacter = doc.reference.parent.parent;
+        if (parentCharacter != null) {
+          final parentSnap = await parentCharacter.get();
+          final parentData = parentSnap.data() as Map<String, dynamic>?;
+          if (imagePath.isEmpty) {
+            imagePath = parentData?['imagePath'] as String? ?? '';
+          }
+          if (server.isEmpty) {
+            server = parentData?['serverId'] as String? ??
+                parentData?['server'] as String? ??
+                server;
+          }
+          if (jobGrowName.isEmpty) {
+            jobGrowName = parentData?['jobGrowName'] as String? ??
+                parentData?['jobName'] as String? ??
+                jobGrowName;
+          }
+          if (job.isEmpty) {
+            job = parentData?['job'] as String? ??
+                parentData?['jobName'] as String? ??
+                job;
+          }
+          if (level == 0) {
+            level = (parentData?['level'] as num?)?.toInt() ?? level;
+          }
+
+          if (jobGrowName.isEmpty) {
+            final basicStatSnap =
+                await parentCharacter.collection('basic_stat').limit(1).get();
+            if (basicStatSnap.docs.isNotEmpty) {
+              final statData =
+                  basicStatSnap.docs.first.data() as Map<String, dynamic>?;
+              jobGrowName = statData?['jobGrowName'] as String? ?? jobGrowName;
+            }
+          }
+        }
+      }
+
+      if (imagePath == base.imagePath &&
+          jobGrowName == base.jobGrowName &&
+          job == base.job &&
+          level == base.level &&
+          server == base.serverId) {
+        return base;
+      }
+
+      return base.copyWith(
+        imagePath: imagePath,
+        jobGrowName: jobGrowName,
+        job: job,
+        level: level,
+        serverId: server,
+      );
+    }));
+
+    // 서버 선택이 있는 경우 애플리케이션 레벨에서 필터링
+    if (serverId != null && serverId.isNotEmpty) {
+      return rows.where((row) => row.serverId == serverId).toList();
+    }
+    return rows;
   }
 
   // --------------------------------------------------
