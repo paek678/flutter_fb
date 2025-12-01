@@ -447,6 +447,7 @@ class FirestoreService {
         name: data['name'] as String,
         fame: (data['fame'] as num).toInt(),
         job: data['job'] as String,
+        imagePath: (data['imagePath'] ?? '') as String,
       );
     });
   }

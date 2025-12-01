@@ -56,11 +56,15 @@ class _RankingScreenState extends State<RankingScreen> {
       final rows = await FirestoreService.fetchAllRankingRows(
         serverId: _serverIdFromName(_selectedServer),
       );
-      final sorted = List<RankingRow>.from(rows)
-        ..sort((a, b) => a.rank.compareTo(b.rank));
+      final sortedByFame = List<RankingRow>.from(rows)
+        ..sort((a, b) => b.fame.compareTo(a.fame));
+      final ranked = List<RankingRow>.generate(
+        sortedByFame.length,
+        (i) => sortedByFame[i].copyWith(rank: i + 1),
+      );
       if (!mounted) return;
       setState(() {
-        _rankingRows = sorted;
+        _rankingRows = ranked;
         _loading = false;
       });
     } catch (_) {
@@ -149,7 +153,9 @@ class _RankingScreenState extends State<RankingScreen> {
                 'server': _serverNameFromId(row.serverId),
                 'level': 0,
                 'power': row.fame.toString(),
-                'image': 'assets/images/character1.png',
+                'image': row.imagePath.isNotEmpty
+                    ? row.imagePath
+                    : 'assets/images/character1.png',
                 'characterId': row.characterId,
                 'id': row.id,
               })

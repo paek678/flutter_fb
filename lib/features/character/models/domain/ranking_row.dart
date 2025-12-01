@@ -9,6 +9,7 @@ class RankingRow {
   final String name;
   final int fame;
   final String job;
+  final String imagePath;
 
   const RankingRow({
     required this.id,
@@ -18,6 +19,7 @@ class RankingRow {
     required this.name,
     required this.fame,
     required this.job,
+    required this.imagePath,
   });
 
   RankingRow copyWith({
@@ -28,6 +30,7 @@ class RankingRow {
     String? name,
     int? fame,
     String? job,
+    String? imagePath,
   }) {
     return RankingRow(
       id: id ?? this.id,
@@ -37,6 +40,7 @@ class RankingRow {
       name: name ?? this.name,
       fame: fame ?? this.fame,
       job: job ?? this.job,
+      imagePath: imagePath ?? this.imagePath,
     );
   }
 
@@ -49,6 +53,7 @@ class RankingRow {
       name: json['name'] as String? ?? '',
       fame: (json['fame'] as num?)?.toInt() ?? 0,
       job: json['job'] as String? ?? '',
+      imagePath: json['imagePath'] as String? ?? '',
     );
   }
 
@@ -61,6 +66,7 @@ class RankingRow {
       'name': name,
       'fame': fame,
       'job': job,
+      'imagePath': imagePath,
     };
   }
 }
