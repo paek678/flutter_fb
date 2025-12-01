@@ -42,9 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!Platform.isAndroid && !Platform.isIOS) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Google 로그인은 모바일(Android/iOS)에서만 지원됩니다.'),
-        ),
+        const SnackBar(content: Text('Google 로그인은 모바일(Android/iOS)에서만 지원됩니다.')),
       );
       return;
     }
@@ -54,14 +52,14 @@ class _LoginScreenState extends State<LoginScreen> {
       await GoogleSignIn.instance.initialize(serverClientId: _webClientId);
 
       // 1) Google Sign-In 플로우 시작
-      final GoogleSignInAccount? googleUser =
-          await GoogleSignIn.instance.authenticate();
+      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance
+          .authenticate();
 
       if (googleUser == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Google 로그인 취소됨')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Google 로그인 취소됨')));
         return;
       }
 
@@ -75,8 +73,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       // 3) Firebase Auth 로그인
-      final UserCredential userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithCredential(credential);
 
       final User? user = userCredential.user;
       if (user == null) {
@@ -118,9 +116,9 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[Google Login Error] $e\n$st');
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google 로그인 중 오류 발생: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Google 로그인 중 오류 발생: $e')));
     }
   }
 
@@ -143,40 +141,14 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // 로고 / 타이틀
-              Text(
-                '로그인',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.h1.copyWith(
-                  color: AppColors.primaryText,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-
-              // 이메일 입력
-              CustomTextField(
-                hintText: '이메일 주소',
-                controller: _emailController,
-              ),
-              const SizedBox(height: AppSpacing.md),
-
-              // 비밀번호 입력 (지금 CustomTextField에 obscureText가 없으니 그대로 사용)
-              CustomTextField(
-                hintText: '비밀번호',
-                controller: _passwordController,
-              ),
-              const SizedBox(height: AppSpacing.lg),
+              Image.asset('assets/images/logo_done_big.png', height: 180),
+              const SizedBox(height: 64),
 
               // 기본 로그인 버튼
-              PrimaryButton(
-                text: '로그인',
-                onPressed: _onLogin,
-              ),
+              PrimaryButton(text: '회원가입 없이 둘러보기', onPressed: _onLogin),
 
-              const SizedBox(height: AppSpacing.md),
-
-              // 구분선 "또는"
-              _buildDividerWithText('또는'),
-
+              // // 구분선 "또는"
+              // _buildDividerWithText('또는'),
               const SizedBox(height: AppSpacing.md),
 
               // Google 로그인 버튼 (흰 배경, 로고 + 텍스트)
@@ -208,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(width: 8),
                       Text(
                         'Google 계정으로 로그인',
-                        style: AppTextStyles.body2.copyWith(
+                        style: AppTextStyles.body1.copyWith(
                           color: AppColors.primaryText,
                           fontWeight: FontWeight.w600,
                         ),
@@ -220,27 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // 회원/찾기 링크 영역
-              _buildAuthLinksRow(context),
-
-              const SizedBox(height: AppSpacing.md),
-
               // 게스트 로그인
-              Center(
-                child: TextButton.icon(
-                  onPressed: _onGuestLogin,
-                  icon: const Icon(Icons.person_outline),
-                  label: Text(
-                    '게스트로 둘러보기',
-                    style: AppTextStyles.body1.copyWith(
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.secondaryText,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -252,24 +204,16 @@ class _LoginScreenState extends State<LoginScreen> {
     return Row(
       children: [
         Expanded(
-          child: Container(
-            height: 1,
-            color: AppColors.border.withOpacity(0.6),
-          ),
+          child: Container(height: 1, color: AppColors.border.withOpacity(0.6)),
         ),
         const SizedBox(width: 8),
         Text(
           text,
-          style: AppTextStyles.caption.copyWith(
-            color: AppColors.secondaryText,
-          ),
+          style: AppTextStyles.caption.copyWith(color: AppColors.secondaryText),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Container(
-            height: 1,
-            color: AppColors.border.withOpacity(0.6),
-          ),
+          child: Container(height: 1, color: AppColors.border.withOpacity(0.6)),
         ),
       ],
     );
