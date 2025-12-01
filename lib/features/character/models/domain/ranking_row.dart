@@ -2,27 +2,18 @@ import 'package:meta/meta.dart';
 
 @immutable
 class RankingRow {
-  /// 랭킹 문서 ID (필요 없으면 그냥 '' 넣어도 됨)
   final String id;
-
-  /// 상세 조회에 사용할 캐릭터 ID
   final String characterId;
-
-  /// 순위
+  final String serverId;
   final int rank;
-
-  /// 캐릭터 이름 (위젯에서 row.name)
   final String name;
-
-  /// 명성 (row.fame)
-  final int fame; // 명성이 없을 수 있으면 int? 로 바꾸고 UI도 처리해줘야 함
-
-  /// 직업명 (row.job)
+  final int fame;
   final String job;
 
   const RankingRow({
     required this.id,
     required this.characterId,
+    required this.serverId,
     required this.rank,
     required this.name,
     required this.fame,
@@ -32,6 +23,7 @@ class RankingRow {
   RankingRow copyWith({
     String? id,
     String? characterId,
+    String? serverId,
     int? rank,
     String? name,
     int? fame,
@@ -40,6 +32,7 @@ class RankingRow {
     return RankingRow(
       id: id ?? this.id,
       characterId: characterId ?? this.characterId,
+      serverId: serverId ?? this.serverId,
       rank: rank ?? this.rank,
       name: name ?? this.name,
       fame: fame ?? this.fame,
@@ -50,11 +43,12 @@ class RankingRow {
   factory RankingRow.fromJson(Map<String, dynamic> json, {String? id}) {
     return RankingRow(
       id: id ?? (json['id'] as String? ?? ''),
-      characterId: json['characterId'] as String,
-      rank: (json['rank'] as num).toInt(),
-      name: json['name'] as String,
-      fame: (json['fame'] as num).toInt(),
-      job: json['job'] as String,
+      characterId: json['characterId'] as String? ?? '',
+      serverId: json['serverId'] as String? ?? json['server'] as String? ?? '',
+      rank: (json['rank'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      fame: (json['fame'] as num?)?.toInt() ?? 0,
+      job: json['job'] as String? ?? '',
     );
   }
 
@@ -62,6 +56,7 @@ class RankingRow {
     return {
       'id': id,
       'characterId': characterId,
+      'serverId': serverId,
       'rank': rank,
       'name': name,
       'fame': fame,

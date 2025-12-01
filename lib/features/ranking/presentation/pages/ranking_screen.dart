@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+
 import '../../data/job_data.dart';
-import '../../widgets/ranking_list.dart';
+import '../../widgets/awakening_selector.dart';
 import '../../widgets/job_selector.dart';
+import '../../widgets/ranking_list.dart';
 import '../../widgets/server_selector.dart';
 import '../../../character/presentation/pages/character_detail_page.dart';
-import '../../../../core/theme/app_spacing.dart';
+import '../../../character/models/domain/character.dart';
+import '../../../character/models/domain/ranking_row.dart';
+import '../../../../core/services/firebase_service.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../widgets/awakening_selector.dart';
-import 'package:flutter_fb/features/character/models/domain/character.dart'; // ✅ 추가
+import '../../../../core/theme/app_spacing.dart';
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
@@ -21,6 +24,10 @@ class _RankingScreenState extends State<RankingScreen> {
   String? _selectedJob;
   String? _selectedAwakening;
 
+  bool _loading = false;
+  String? _error;
+  List<RankingRow> _rankingRows = [];
+
   final List<String> _servers = [
     '전체',
     '카인',
@@ -33,47 +40,37 @@ class _RankingScreenState extends State<RankingScreen> {
     '바칼',
   ];
 
-  final List<Map<String, dynamic>> _dummyRankingData = [
-    {
-      'rank': 1,
-      'name': '플레이어A',
-      'score': 185000,
-      'job': '귀검사(남)',
-      'awakening': '아수라',
-      'type': '딜러',
-      'server': '카시야스',
-      'class': '아수라',
-      'level': 110,
-      'power': '185,000',
-      'image': 'assets/images/character1.png',
-    },
-    {
-      'rank': 2,
-      'name': '플레이어B',
-      'score': 182500,
-      'job': '귀검사(남)',
-      'awakening': '아수라',
-      'type': '딜러',
-      'server': '디레지에',
-      'class': '아수라',
-      'level': 110,
-      'power': '182,500',
-      'image': 'assets/images/character1.png',
-    },
-    {
-      'rank': 3,
-      'name': '플레이어C',
-      'score': 179800,
-      'job': '귀검사(남)',
-      'awakening': '아수라',
-      'type': '딜러',
-      'server': '힐더',
-      'class': '아수라',
-      'level': 110,
-      'power': '179,800',
-      'image': 'assets/images/character1.png',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchRankingRows();
+  }
+
+  Future<void> _fetchRankingRows() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final rows = await FirestoreService.fetchAllRankingRows(
+        serverId: _serverIdFromName(_selectedServer),
+      );
+      final sorted = List<RankingRow>.from(rows)
+        ..sort((a, b) => a.rank.compareTo(b.rank));
+      if (!mounted) return;
+      setState(() {
+        _rankingRows = sorted;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '랭킹 데이터를 불러오지 못했습니다.';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +88,7 @@ class _RankingScreenState extends State<RankingScreen> {
               selectedServer: _selectedServer,
               onServerSelected: (server) {
                 setState(() => _selectedServer = server);
+                _fetchRankingRows();
               },
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -109,43 +107,78 @@ class _RankingScreenState extends State<RankingScreen> {
               ),
             const SizedBox(height: AppSpacing.md),
             if (_selectedJob != null && _selectedAwakening != null)
-              RankingList(
-                job: _selectedJob!,
-                awakening: _selectedAwakening!,
-                rankingData: _dummyRankingData
-                    .where(
-                      (r) =>
-                          _selectedServer == '전체' ||
-                          r['server'] == _selectedServer,
-                    )
-                    .toList(),
-                onTapCharacter: (characterMap) {
-                  final c = Character(
-                    id: 'rank_${characterMap['rank']}',
-                    name: characterMap['name'] as String? ?? 'Unknown',
-                    job: characterMap['class'] as String? ?? '',
-                    level: characterMap['level'] as int? ?? 0,
-                    server: characterMap['server'] as String? ?? '',
-                    imagePath:
-                        characterMap['image'] as String? ??
-                        'assets/images/character1.png',
-                    fame:
-                        (characterMap['power'] ?? characterMap['score'] ?? '0'),
-                  );
-
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          CharacterDetailView(character: c, fromRanking: true),
-                    ),
-                  );
-                },
-              ),
+              _buildRankingSection(),
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildRankingSection() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Text(
+          _error!,
+          style: const TextStyle(color: AppColors.secondaryText),
+        ),
+      );
+    }
+
+    if (_rankingRows.isEmpty) {
+      return const Center(
+        child: Text(
+          '랭킹 데이터가 없습니다.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
+      );
+    }
+
+    return RankingList(
+      job: _selectedJob!,
+      awakening: _selectedAwakening!,
+      rankingData: _rankingRows
+          .map((row) => {
+                'rank': row.rank,
+                'name': row.name,
+                'class': row.job,
+                'server': _serverNameFromId(row.serverId),
+                'level': 0,
+                'power': row.fame.toString(),
+                'image': 'assets/images/character1.png',
+                'characterId': row.characterId,
+                'id': row.id,
+              })
+          .toList(),
+      onTapCharacter: (characterMap) {
+        final fameRaw = characterMap['power'] ?? characterMap['score'] ?? '0';
+        final fame = int.tryParse('$fameRaw') ?? 0;
+
+        final character = Character(
+          id: characterMap['characterId'] as String? ??
+              characterMap['id'] as String? ??
+              '',
+          name: characterMap['name'] as String? ?? 'Unknown',
+          job: characterMap['class'] as String? ?? '',
+          level: characterMap['level'] as int? ?? 0,
+          server: characterMap['server'] as String? ?? '',
+          imagePath: characterMap['image'] as String? ??
+              'assets/images/character1.png',
+          fame: fame,
+        );
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                CharacterDetailView(character: character, fromRanking: true),
+          ),
+        );
+      },
     );
   }
 
@@ -158,5 +191,37 @@ class _RankingScreenState extends State<RankingScreen> {
 
   void _onAwakeningSelected(String aw) {
     setState(() => _selectedAwakening = aw);
+  }
+
+  String? _serverIdFromName(String name) {
+    if (name == '전체') return null;
+
+    const map = <String, String>{
+      '카인': 'cain',
+      '디레지에': 'diregie',
+      '시로코': 'siroco',
+      '프레이': 'prey',
+      '카시야스': 'casyas',
+      '힐더': 'hilder',
+      '안톤': 'anton',
+      '바칼': 'bakal',
+    };
+
+    return map[name];
+  }
+
+  String _serverNameFromId(String id) {
+    const map = <String, String>{
+      'cain': '카인',
+      'diregie': '디레지에',
+      'siroco': '시로코',
+      'prey': '프레이',
+      'casyas': '카시야스',
+      'hilder': '힐더',
+      'anton': '안톤',
+      'bakal': '바칼',
+    };
+    if (id.isEmpty) return '';
+    return map[id] ?? id;
   }
 }

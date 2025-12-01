@@ -442,12 +442,34 @@ class FirestoreService {
       return RankingRow(
         id: doc.id,
         characterId: data['characterId'] as String,
+        serverId: (data['serverId'] ?? data['server'] ?? '') as String,
         rank: (data['rank'] as num?)?.toInt() ?? i + 1,
         name: data['name'] as String,
         fame: (data['fame'] as num).toInt(),
         job: data['job'] as String,
       );
     });
+  }
+
+  // --------------------------------------------------
+  // 1-1) 랭킹 전체 조회 (collectionGroup: ranking_rows)
+  // --------------------------------------------------
+  static Future<List<RankingRow>> fetchAllRankingRows({
+    String? serverId,
+    int? limit,
+  }) async {
+    Query<Map<String, dynamic>> query =
+        _db.collectionGroup('ranking_rows');
+
+    if (serverId != null) {
+      query = query.where('serverId', isEqualTo: serverId);
+    }
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+
+    final snap = await query.get();
+    return rankingRowsFromQuerySnapshot(snap);
   }
 
   // --------------------------------------------------

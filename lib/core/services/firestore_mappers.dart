@@ -12,6 +12,7 @@ import '../../features/community/model/community_comment.dart';
 
 // ── auth 쪽 유저 모델 ──
 import '../../features/auth/model/app_user.dart';
+import '../../features/character/models/domain/ranking_row.dart';
 
 // ── auction(경매) 관련 모델 ──
 import '../../features/auction/models/auction_item.dart' as auction_simple;
@@ -173,8 +174,34 @@ AppUser appUserFromFirestoreDoc(
   );
 }
 
+// ---------------------------------------------------------------------------
+// 5) Character RankingRow 매퍼
+// ---------------------------------------------------------------------------
+
+RankingRow rankingRowFromFirestoreDoc(
+  DocumentSnapshot<Map<String, dynamic>> doc,
+) {
+  final data = doc.data() ?? <String, dynamic>{};
+
+  return RankingRow(
+    id: (data['id'] ?? doc.id) as String,
+    characterId: (data['characterId'] ?? '') as String,
+    serverId: (data['serverId'] ?? data['server'] ?? '') as String,
+    rank: (data['rank'] as num?)?.toInt() ?? 0,
+    name: (data['name'] ?? '') as String,
+    fame: (data['fame'] as num?)?.toInt() ?? 0,
+    job: (data['job'] ?? '') as String,
+  );
+}
+
+List<RankingRow> rankingRowsFromQuerySnapshot(
+  QuerySnapshot<Map<String, dynamic>> snap,
+) {
+  return snap.docs.map(rankingRowFromFirestoreDoc).toList();
+}
+
 // ─────────────────────────────────────────────
-// 5) QuerySnapshot → List<모델> 헬퍼들
+// 6) QuerySnapshot → List<모델> 헬퍼들
 // ─────────────────────────────────────────────
 
 /// QuerySnapshot → List<Notice>
@@ -205,7 +232,7 @@ List<AppUser> appUsersFromQuerySnapshot(
 }
 
 // ─────────────────────────────────────────────
-// 6) 🔽 경매 관련 매퍼들
+// 7) 🔽 경매 관련 매퍼들
 // ─────────────────────────────────────────────
 
 /// Firestore auction_items/{itemId}/listings/{auctionNo}
