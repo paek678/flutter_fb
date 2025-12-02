@@ -33,6 +33,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   bool _loading = true;
   bool _commentsCollapsed = false;
   bool _viewCounted = false;
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -140,6 +141,36 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     // Post 좋아요 API 구현 예정 (현재는 미구현)
   }
 
+  Future<void> _deletePost() async {
+    if (_deleting || _post.docId == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('게시글 삭제'),
+        content: const Text('게시글을 삭제하시겠어요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _deleting = true);
+    await widget.repo.deletePost(_post.docId!);
+    if (!mounted) return;
+
+    Navigator.pop(context, true); // 목록으로 복귀 + 리스트 새로고침 유도
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateStr = _fmtDate(_post.createdAt);
@@ -241,14 +272,44 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                                             ),
                                             const SizedBox(height: 16),
                                             Center(
-                                              child: IconButton(
-                                                onPressed: _togglePostLike,
-                                                icon: Icon(
-                                                  Icons.thumb_up_outlined,
-                                                  size: 24,
-                                                  color: AppColors.secondaryText,
-                                                ),
-                                                splashRadius: 20,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  IconButton(
+                                                    onPressed: _togglePostLike,
+                                                    icon: Icon(
+                                                      Icons.thumb_up_outlined,
+                                                      size: 24,
+                                                      color: AppColors
+                                                          .secondaryText,
+                                                    ),
+                                                    splashRadius: 20,
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  OutlinedButton.icon(
+                                                    onPressed: _deleting
+                                                        ? null
+                                                        : _deletePost,
+                                                    style: OutlinedButton
+                                                        .styleFrom(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 10,
+                                                      ),
+                                                      side: const BorderSide(
+                                                        color: AppColors.border,
+                                                      ),
+                                                      foregroundColor:
+                                                          AppColors.primaryText,
+                                                    ),
+                                                    icon: const Icon(
+                                                      Icons.delete_outline,
+                                                      size: 18,
+                                                    ),
+                                                    label: const Text('삭제'),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ],
