@@ -12,13 +12,14 @@ import '../../features/community/model/community_comment.dart';
 
 // ── auth 쪽 유저 모델 ──
 import '../../features/auth/model/app_user.dart';
+
+// ── character 랭킹 모델 ──
 import '../../features/character/models/domain/ranking_row.dart';
 
 // ── auction(경매) 관련 모델 ──
 import '../../features/auction/models/auction_item.dart' as auction_simple;
 import '../../features/auction/models/auction_item_data.dart' as auction_detail;
 import 'package:flutter_fb/features/auction/models/item_price.dart';
-
 
 // ─────────────────────────────────────────────
 // 1) Notice(공지) 매퍼
@@ -97,7 +98,7 @@ CommunityPost communityPostFromFirestoreDoc(
 
   return CommunityPost(
     id: id,
-    docId: doc.id, // Firestore 문서 ID를 모델에 주입해 후속 호출에서 사용
+    docId: doc.id, // Firestore 문서 ID
     title: title,
     content: content,
     author: author,
@@ -412,7 +413,7 @@ List<ItemPrice> itemPricesFromQuerySnapshot(
 }
 
 // ─────────────────────────────────────────────
-// 7) 모델 → Firestore Map (Create / Update 용)
+// 8) 모델 → Firestore Map (Create / Update 용)
 // ─────────────────────────────────────────────
 
 Map<String, dynamic> noticeToFirestoreMap(Notice n) {

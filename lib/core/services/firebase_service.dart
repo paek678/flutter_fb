@@ -22,7 +22,6 @@ import '../../features/auction/models/auction_item_data.dart' as auction_detail;
 import 'package:flutter_fb/features/auction/models/item_price.dart';
 
 // character
-
 import '../../features/character/models/domain/character.dart';
 import '../../features/character/models/domain/ranking_row.dart';
 import '../../features/character/models/domain/character_info.dart';
@@ -46,6 +45,12 @@ class FirestoreService {
     _currentUser = user;
   }
 
+  /// 🔗 네오플 아이템 이미지 URL 생성 헬퍼
+  static String _neopleItemImageUrl(String? itemId) {
+    if (itemId == null || itemId.isEmpty) return '';
+    return 'https://img-api.neople.co.kr/df/items/$itemId';
+  }
+
   // ---------------------------------------------------------------------------
   // 1) Notice
   // ---------------------------------------------------------------------------
@@ -55,9 +60,8 @@ class FirestoreService {
     bool? pinned,
     int limit = 20,
   }) async {
-    Query<Map<String, dynamic>> q = _db
-        .collection('notices')
-        .orderBy('created_at', descending: true);
+    Query<Map<String, dynamic>> q =
+        _db.collection('notices').orderBy('created_at', descending: true);
 
     if (category != null) {
       q = q.where('notice_type', isEqualTo: noticeCategoryToString(category));
@@ -128,9 +132,8 @@ class FirestoreService {
     String? authorUid,
     int limit = 20,
   }) async {
-    Query<Map<String, dynamic>> q = _db
-        .collection('boards')
-        .orderBy('created_at', descending: true);
+    Query<Map<String, dynamic>> q =
+        _db.collection('boards').orderBy('created_at', descending: true);
 
     if (category != null) {
       q = q.where('category', isEqualTo: categoryToString(category));
@@ -378,7 +381,7 @@ class FirestoreService {
   /// All auction_items with simple listings mapped.
   /// Return: { itemId: List<AuctionItemSimple> }
   static Future<Map<String, List<auction_simple.AuctionItem>>>
-  fetchAllAuctionListingsSimple({int perItemLimit = 50}) async {
+      fetchAllAuctionListingsSimple({int perItemLimit = 50}) async {
     final rootSnap = await _db.collection('auction_items').get();
 
     final Map<String, List<auction_simple.AuctionItem>> result = {};
@@ -399,7 +402,7 @@ class FirestoreService {
   /// All auction_items with detail listings mapped.
   /// Return: { itemId: List<AuctionItemDetail> }
   static Future<Map<String, List<auction_detail.AuctionItem>>>
-  fetchAllAuctionListingsDetail({int perItemLimit = 50}) async {
+      fetchAllAuctionListingsDetail({int perItemLimit = 50}) async {
     final rootSnap = await _db.collection('auction_items').get();
 
     final Map<String, List<auction_detail.AuctionItem>> result = {};
@@ -418,7 +421,7 @@ class FirestoreService {
   }
 
   // --------------------------------------------------
-  // 1) 랭킹 미리보기
+  // 1) 랭킹 미리보기 (1번 코드 버전 유지)
   // --------------------------------------------------
   static Future<List<RankingRow>> fetchRankingPreview({
     String? server,
@@ -583,9 +586,8 @@ class FirestoreService {
 
   // --------------------------------------------------
   // 4) 캐릭터 상세 (CharacterInfo)
+  //   → 2번 코드의 character_info + fallback 로직 통합
   // --------------------------------------------------
-  // core/services/firebase_service.dart
-
   static Future<CharacterInfo?> fetchCharacterInfoById(
     String characterId,
   ) async {
@@ -594,18 +596,108 @@ class FirestoreService {
 
     if (!charDoc.exists) return null;
 
-    final summary = Character.fromJson(charDoc.data()!, id: charDoc.id);
+    // 1) 먼저 character_info/latest 문서가 있으면 거기서 전부 읽는다.
+    final infoDoc =
+        await charRef.collection('character_info').doc('latest').get();
 
-    // ───────────────────────────────── stats / detail_stat ────────────────────────────────
+    if (infoDoc.exists) {
+      final info = infoDoc.data() ?? <String, dynamic>{};
 
-    final basicStatDoc = await charRef
-        .collection('basic_stat')
-        .doc('latest')
-        .get();
-    final detailStatDoc = await charRef
-        .collection('detail_stat')
-        .doc('latest')
-        .get();
+      // summary → Character
+      Character summary;
+      final summaryMap = info['summary'] as Map<String, dynamic>?;
+
+      if (summaryMap != null) {
+        summary = Character.fromJson(summaryMap, id: charDoc.id);
+      } else {
+        summary = Character.fromJson(charDoc.data()!, id: charDoc.id);
+      }
+
+      // stats → CharacterStats.fromStatusList
+      final statusList = info['stats'] as List<dynamic>? ?? const [];
+      final CharacterStats stats = CharacterStats.fromStatusList(statusList);
+
+      // detailStats → CharacterDetailStats.fromJson
+      final detailMap =
+          info['detailStats'] as Map<String, dynamic>? ?? const {};
+      final CharacterDetailStats detailStats =
+          CharacterDetailStats.fromJson(detailMap);
+
+      // extraDetailStats → List<DetailStat>
+      final extraRaw = info['extraDetailStats'] as List<dynamic>? ?? const [];
+      final List<DetailStat> extraDetailStats = extraRaw.map((e) {
+        final m = e as Map<String, dynamic>;
+        return DetailStat(
+          name: m['name']?.toString() ?? '',
+          value: m['value']?.toString() ?? '',
+        );
+      }).toList();
+
+      // equipments → List<EquipmentItem>
+      final equipRaw = info['equipments'] as List<dynamic>? ?? const [];
+      final List<EquipmentItem> equipments =
+          equipRaw.whereType<Map<String, dynamic>>().map((m) {
+        return EquipmentItem(
+          category: m['category']?.toString() ?? '',
+          imagePath: m['imagePath']?.toString() ?? '',
+          name: m['name']?.toString() ?? '',
+          grade: m['grade']?.toString() ?? '',
+          option: m['option']?.toString() ?? '',
+          desc: m['desc']?.toString() ?? '',
+        );
+      }).toList();
+
+      // avatars → List<AvatarItem>
+      final avatarRaw = info['avatars'] as List<dynamic>? ?? const [];
+      final List<AvatarItem> avatars =
+          avatarRaw.whereType<Map<String, dynamic>>().map((m) {
+        final imagesAny = m['images'];
+        List<String> images;
+        if (imagesAny is List) {
+          images = imagesAny.map((e) => e.toString()).toList();
+        } else {
+          images = const <String>[];
+        }
+
+        return AvatarItem(
+          category: m['category']?.toString() ?? '',
+          images: images,
+          name: m['name']?.toString() ?? '',
+          option: m['option']?.toString() ?? '',
+          desc: m['desc']?.toString() ?? '',
+        );
+      }).toList();
+
+      // buffItems → List<BuffItem>
+      final buffRaw = info['buffItems'] as List<dynamic>? ?? const [];
+      final List<BuffItem> buffItems =
+          buffRaw.whereType<Map<String, dynamic>>().map((m) {
+        return BuffItem(
+          category: m['category']?.toString() ?? '',
+          imagePath: m['imagePath']?.toString() ?? '',
+          name: m['name']?.toString() ?? '',
+          grade: m['grade']?.toString() ?? '',
+          option: m['option']?.toString() ?? '',
+        );
+      }).toList();
+
+      return CharacterInfo(
+        summary: summary,
+        stats: stats,
+        detailStats: detailStats,
+        extraDetailStats: extraDetailStats,
+        equipments: equipments,
+        avatars: avatars,
+        buffItems: buffItems,
+      );
+    }
+
+    // 2) character_info 가 없는 옛날 데이터용 Fallback (기존 raw 기반 로직)
+    // ───────────────────────────── stats / detail_stat ─────────────────────────────
+    final basicStatDoc =
+        await charRef.collection('basic_stat').doc('latest').get();
+    final detailStatDoc =
+        await charRef.collection('detail_stat').doc('latest').get();
 
     CharacterStats stats = const CharacterStats.empty();
     if (basicStatDoc.exists) {
@@ -613,21 +705,18 @@ class FirestoreService {
       final raw = data['raw'] as Map<String, dynamic>? ?? {};
 
       final statusList = raw['status'] as List<dynamic>? ?? [];
-
       stats = CharacterStats.fromStatusList(statusList);
     }
 
     CharacterDetailStats detailStats = const CharacterDetailStats.empty();
-    List<DetailStat> extraDetailStats = const []; // ✅ 타입 수정
+    List<DetailStat> extraDetailStats = const [];
 
     if (detailStatDoc.exists) {
       final data = detailStatDoc.data()!;
       final raw = data['raw'] as Map<String, dynamic>? ?? {};
 
-      // 메인 숫자 세부 스탯
       detailStats = CharacterDetailStats.fromJson(raw);
 
-      // 추가 라인들 (name / value 문자열)
       final extra = raw['extra'] as List<dynamic>? ?? [];
       extraDetailStats = extra.map((e) {
         final m = e as Map<String, dynamic>;
@@ -635,11 +724,10 @@ class FirestoreService {
           name: m['name'] as String? ?? '',
           value: m['value'] as String? ?? '',
         );
-      }).toList(); // ✅ cast 필요 없음
+      }).toList();
     }
 
-    // ───────────────────────────────── equip ────────────────────────────────
-
+    // ───────────────────────────── equip ─────────────────────────────
     final equipDoc = await charRef.collection('equip').doc('latest').get();
     List<EquipmentItem> equipments = const [];
 
@@ -647,15 +735,17 @@ class FirestoreService {
       final data = equipDoc.data()!;
       final raw = data['raw'] as Map<String, dynamic>? ?? {};
 
-      // 네플 API 구조가 보통 이런 식이라 가정:
-      // raw['equipment'] = [ {...}, {...} ]
       final list = raw['equipment'] as List<dynamic>? ?? [];
 
       equipments = list.map((e) {
         final m = e as Map<String, dynamic>;
+
+        final String? itemId = m['itemId'] as String?;
+        final String imageUrl = _neopleItemImageUrl(itemId);
+
         return EquipmentItem(
-          category: m['slotName'] as String? ?? '', // 예: "상의", "무기"
-          imagePath: m['itemImage'] as String? ?? '',
+          category: m['slotName'] as String? ?? '',
+          imagePath: imageUrl,
           name: m['itemName'] as String? ?? '',
           grade: m['itemRarity'] as String? ?? '',
           option: (m['reinforce'] != null) ? '+${m['reinforce']} 강화' : '',
@@ -664,13 +754,10 @@ class FirestoreService {
       }).toList();
     }
 
-    // ───────────────────────────────── avatar + creature ────────────────────────────────
-
+    // ───────────────────────────── avatar + creature ─────────────────────────────
     final avatarDoc = await charRef.collection('avatar').doc('latest').get();
-    final creatureDoc = await charRef
-        .collection('creature')
-        .doc('latest')
-        .get();
+    final creatureDoc =
+        await charRef.collection('creature').doc('latest').get();
 
     List<AvatarItem> avatars = [];
 
@@ -682,10 +769,9 @@ class FirestoreService {
         list.map((e) {
           final m = e as Map<String, dynamic>;
 
-          // 이미지 한 장만 써도 되니까 List<String>으로 감싸줌
-          final image = m['itemImage'] as String? ?? '';
+          final String? itemId = m['itemId'] as String?;
+          final String imageUrl = _neopleItemImageUrl(itemId);
 
-          // 엠블렘 이름들을 desc에 합쳐 넣고 싶으면
           final emblems = m['emblems'] as List<dynamic>? ?? [];
           final emblemText = emblems
               .map(
@@ -697,10 +783,10 @@ class FirestoreService {
 
           return AvatarItem(
             category: m['slotName'] as String? ?? '',
-            images: [image], // ✅ List<String>
+            images: [imageUrl],
             name: m['itemName'] as String? ?? '',
             option: m['optionAbility'] as String? ?? '',
-            desc: emblemText, // or itemRarity, 네 맘대로
+            desc: emblemText,
           );
         }),
       );
@@ -711,10 +797,13 @@ class FirestoreService {
       final creature = raw['creature'] as Map<String, dynamic>?;
 
       if (creature != null) {
+        final String? creatureItemId = creature['itemId'] as String?;
+        final String imageUrl = _neopleItemImageUrl(creatureItemId);
+
         avatars.add(
           AvatarItem(
             category: '크리쳐',
-            images: [creature['itemImage'] as String? ?? ''], // 있으면 채우고
+            images: [imageUrl],
             name: creature['itemName'] as String? ?? '',
             desc: creature['itemRarity'] as String? ?? '',
             option: creature['optionAbility'] as String? ?? '',
@@ -723,55 +812,83 @@ class FirestoreService {
       }
     }
 
-    // ───────────────────────────────── buff_* ────────────────────────────────
-
-    final buffAvatarDoc = await charRef
-        .collection('buff_avatar')
-        .doc('latest')
-        .get();
-    final buffEquipDoc = await charRef
-        .collection('buff_equip')
-        .doc('latest')
-        .get();
-    final buffCreatureDoc = await charRef
-        .collection('buff_creature')
-        .doc('latest')
-        .get();
+    // ───────────────────────────── buff_* ─────────────────────────────
+    final buffAvatarDoc =
+        await charRef.collection('buff_avatar').doc('latest').get();
+    final buffEquipDoc =
+        await charRef.collection('buff_equip').doc('latest').get();
+    final buffCreatureDoc =
+        await charRef.collection('buff_creature').doc('latest').get();
 
     List<BuffItem> buffItems = [];
 
-    void addBuffFromDoc(
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      String categoryLabel,
-    ) {
-      if (!doc.exists) return;
-      final raw = doc.data()?['raw'] as Map<String, dynamic>? ?? {};
+    // 공통 버프 아이템 추가 헬퍼
+    void _addBuffItemFromMap(
+      Map<String, dynamic> m, {
+      String? fallbackCategory,
+    }) {
+      final String slotName = m['slotName'] as String? ?? '';
+      final String category =
+          slotName.isNotEmpty ? slotName : (fallbackCategory ?? '');
 
-      // 예: raw['equipment'], raw['avatar'] 등 각자 구조에 맞게
-      final list =
-          (raw['equipment'] ?? raw['avatar'] ?? raw['creature'])
-              as List<dynamic>? ??
-          [];
+      final String? itemId = m['itemId'] as String?;
+      final String imageUrl = _neopleItemImageUrl(itemId);
 
-      buffItems.addAll(
-        list.map((e) {
-          final m = e as Map<String, dynamic>;
-          return BuffItem(
-            category: categoryLabel,
-            imagePath: '',
-            name: m['itemName'] as String? ?? '',
-            grade: m['itemRarity'] as String? ?? '',
-            option: m['optionAbility'] as String? ?? '',
-          );
-        }),
+      buffItems.add(
+        BuffItem(
+          category: category, // 상의 아바타 / 하의 아바타 / 크리쳐 등
+          imagePath: imageUrl,
+          name: m['itemName'] as String? ?? '',
+          grade: m['itemRarity'] as String? ?? '',
+          option: m['optionAbility']?.toString() ?? '',
+        ),
       );
     }
 
-    addBuffFromDoc(buffEquipDoc, '버프 장비');
-    addBuffFromDoc(buffAvatarDoc, '버프 아바타');
-    addBuffFromDoc(buffCreatureDoc, '버프 크리쳐');
+    // 각 문서에서 equipment / avatar / creature를 다 훑으면서 BuffItem으로 변환
+    void _addBuffFromDoc(
+      DocumentSnapshot<Map<String, dynamic>> doc, {
+      String? creatureFallbackCategory,
+    }) {
+      if (!doc.exists) return;
+      final raw = doc.data()?['raw'] as Map<String, dynamic>? ?? {};
 
-    // ───────────────────────────────── CharacterInfo 조립 ────────────────────────────────
+      // 1) 버프 장비
+      final equipList = raw['equipment'];
+      if (equipList is List) {
+        for (final e in equipList.whereType<Map<String, dynamic>>()) {
+          _addBuffItemFromMap(e);
+        }
+      }
+
+      // 2) 버프 아바타
+      final avatarList = raw['avatar'];
+      if (avatarList is List) {
+        for (final a in avatarList.whereType<Map<String, dynamic>>()) {
+          _addBuffItemFromMap(a);
+        }
+      }
+
+      // 3) 버프 크리쳐
+      final creature = raw['creature'];
+      if (creature is Map<String, dynamic>) {
+        _addBuffItemFromMap(
+          creature,
+          fallbackCategory: creatureFallbackCategory ?? '크리쳐',
+        );
+      }
+    }
+
+    // 실제로 세 문서를 모두 처리
+    _addBuffFromDoc(buffEquipDoc);
+    _addBuffFromDoc(buffAvatarDoc);
+    _addBuffFromDoc(
+      buffCreatureDoc,
+      creatureFallbackCategory: '크리쳐',
+    );
+
+    // ───────────────────────────── summary (Character) ─────────────────────────────
+    final summary = Character.fromJson(charDoc.data()!, id: charDoc.id);
 
     return CharacterInfo(
       summary: summary,
