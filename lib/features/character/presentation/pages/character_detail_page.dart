@@ -77,6 +77,9 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
     });
 
     try {
+      debugPrint(
+        '[CharacterDetailView] fetch detail id=${widget.character.id} name=${widget.character.name}',
+      );
       final info = await _repository.getCharacterInfoById(widget.character.id);
 
       if (!mounted) return;
@@ -91,6 +94,17 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
         avatars: const [],
         buffItems: const [],
       );
+
+      if (info != null) {
+        debugPrint(
+          '[CharacterDetailView] detail loaded id=${widget.character.id} stats=${info.stats} detailStats=${info.detailStats} '
+          'equipments=${info.equipments.length} avatars=${info.avatars.length} buffItems=${info.buffItems.length}',
+        );
+      } else {
+        debugPrint(
+          '[CharacterDetailView] detail null, using fallback for id=${widget.character.id}',
+        );
+      }
 
       setState(() {
         _detail = info ?? fallback;
@@ -114,19 +128,17 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: widget.fromRanking
-          ? AppBar(
-              title: Text(c.name, style: AppTextStyles.subtitle),
-              backgroundColor: AppColors.surface,
-              foregroundColor: AppColors.primaryText,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new),
-                iconSize: 18,
-                onPressed: () => Navigator.pop(context),
-              ),
-              elevation: 1,
-            )
-          : null,
+      appBar: AppBar(
+        title: Text(c.name, style: AppTextStyles.subtitle),
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.primaryText,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          iconSize: 18,
+          onPressed: () => Navigator.pop(context),
+        ),
+        elevation: 1,
+      ),
       body: Column(
         children: [
           _buildCharacterInfo(c),

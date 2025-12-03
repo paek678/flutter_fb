@@ -172,6 +172,7 @@ class _RankingScreenState extends State<RankingScreen> {
         'name': row.name,
         'class': row.jobGrowName.isNotEmpty ? row.jobGrowName : row.job,
         'server': _serverNameFromId(row.serverId),
+        'serverId': row.serverId,
         'level': row.level,
         'power': row.fame.toString(),
         'image': row.imagePath.isNotEmpty
@@ -187,13 +188,23 @@ class _RankingScreenState extends State<RankingScreen> {
       awakening: _selectedAwakening ?? '전체',
       rankingData: rankingData,
       onTapCharacter: (characterMap) {
+        debugPrint('[RankingScreen] onTapCharacter raw=$characterMap');
         final fameRaw = characterMap['power'] ?? characterMap['score'] ?? '0';
         final fame = int.tryParse('$fameRaw') ?? 0;
 
+        // 랭킹 → 상세: 서버 코드 접두사를 항상 붙여 전달
+        final serverId = characterMap['serverId'] as String? ?? '';
+        String characterId = characterMap['characterId'] as String? ??
+            characterMap['id'] as String? ??
+            '';
+        if (serverId.isNotEmpty &&
+            characterId.isNotEmpty &&
+            !characterId.startsWith('${serverId}_')) {
+          characterId = '${serverId}_$characterId';
+        }
+
         final character = Character(
-          id: characterMap['characterId'] as String? ??
-              characterMap['id'] as String? ??
-              '',
+          id: characterId,
           name: characterMap['name'] as String? ?? 'Unknown',
           job: characterMap['class'] as String? ?? '',
           level: characterMap['level'] as int? ?? 0,
@@ -201,6 +212,10 @@ class _RankingScreenState extends State<RankingScreen> {
           imagePath: characterMap['image'] as String? ??
               'assets/images/character1.png',
           fame: fame,
+        );
+
+        debugPrint(
+          '[RankingScreen] onTapCharacter -> Character(id=${character.id}, name=${character.name}, server=${character.server}, job=${character.job}, fame=${character.fame}, level=${character.level})',
         );
 
         Navigator.push(
