@@ -180,9 +180,10 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
         child: const Icon(Icons.image_not_supported, size: 28),
       );
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.asset(
+
+    Widget image;
+    if (path.startsWith('http')) {
+      image = Image.network(
         path,
         width: 96,
         height: 96,
@@ -194,7 +195,26 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
           color: Colors.grey.withOpacity(0.15),
           child: const Icon(Icons.broken_image_outlined),
         ),
-      ),
+      );
+    } else {
+      image = Image.asset(
+        path,
+        width: 96,
+        height: 96,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: 96,
+          height: 96,
+          alignment: Alignment.center,
+          color: Colors.grey.withOpacity(0.15),
+          child: const Icon(Icons.broken_image_outlined),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: image,
     );
   }
 }

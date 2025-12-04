@@ -37,6 +37,30 @@ class AuctionPriceTableContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget _buildThumb(String? path) {
+      final placeholder = const Icon(
+        Icons.image_not_supported_outlined,
+        size: 18,
+        color: AppColors.secondaryText,
+      );
+
+      if (path == null || path.isEmpty) {
+        return placeholder;
+      }
+      if (path.startsWith('http')) {
+        return Image.network(
+          path,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => placeholder,
+        );
+      }
+      return Image.asset(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -148,19 +172,10 @@ class AuctionPriceTableContainer extends StatelessWidget {
                           SizedBox(
                             width: 32,
                             height: 32,
-                            child: item.imagePath == null
-                                ? const Icon(
-                                    Icons.image_not_supported_outlined,
-                                    size: 18,
-                                    color: AppColors.secondaryText,
-                                  )
-                                : ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Image.asset(
-                                      item.imagePath!,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: _buildThumb(item.imagePath),
+                            ),
                           ),
                           const SizedBox(width: 4),
 

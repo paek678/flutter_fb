@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/custom_container_divided.dart';
+import '../models/auction_item.dart';
+import '../repository/auction_repository.dart';
+import 'widgets/auction_item_tile.dart';
 
 class AuctionSearchScreen extends StatefulWidget {
   final String query;
@@ -12,84 +15,38 @@ class AuctionSearchScreen extends StatefulWidget {
 }
 
 class _AuctionSearchScreenState extends State<AuctionSearchScreen> {
-  //
-  // 일단은 EquipmentTab에서 쓰던 더미 데이터 재사용
-  final List<Map<String, dynamic>> _equipmentList = [
-    {
-      'category': '세트',
-      'image': 'assets/images/sample_weapon.png',
-      'name': '멸룡 세트',
-      'grade': '레전더리',
-      'option': '+3 세트효과',
-      'optionColor': Colors.blue,
-      'desc': '모속강 +20, 피해 증가 +10%',
-    },
-    {
-      'category': '무기',
-      'image': 'assets/images/sample_weapon.png',
-      'name': '멸룡검 발몽',
-      'grade': '일반',
-      'option': '+15 증폭',
-      'optionColor': Colors.purple,
-      'desc': '모속강 +15 공격력 +30',
-    },
-    {
-      'category': '칭호',
-      'image': 'assets/images/sample_weapon.png',
-      'name': '영광의 칭호',
-      'grade': '에픽',
-      'option': '+2 버프레벨',
-      'optionColor': Colors.orange,
-      'desc': '모든 공격력 +10%',
-    },
-    // ... 나머지 네가 쓰던 리스트 그대로 추가
-  ];
+  final FirestoreAuctionRepository _repo = FirestoreAuctionRepository();
 
-  late List<Map<String, dynamic>> _filteredList;
+  List<AuctionItem> _results = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _filteredList = _filterByQuery(widget.query);
+    _load();
   }
 
-  List<Map<String, dynamic>> _filterByQuery(String q) {
-    final query = q.trim();
-    if (query.isEmpty) return List.from(_equipmentList);
-
-    return _equipmentList.where((item) {
-      final name = (item['name'] ?? '') as String;
-      return name.contains(query);
-    }).toList();
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final items = await _repo.fetchItems(query: widget.query);
+    if (!mounted) return;
+    setState(() {
+      _results = items;
+      _loading = false;
+    });
   }
 
-  Color _getGradeColor(String grade) {
-    switch (grade.toLowerCase()) {
-      case 'common':
-      case '일반':
-        return Colors.grey.shade400;
-      case 'uncommon':
-      case '언커먼':
-        return Colors.green.shade600;
-      case 'rare':
-      case '레어':
-        return Colors.blueAccent;
-      case 'unique':
-      case '유니크':
-        return Colors.purpleAccent;
-      case 'legendary':
-      case '레전더리':
-        return Colors.orange;
-      case 'epic':
-      case '에픽':
-        return Colors.yellow.shade700;
-      case 'mythic':
-      case '신화':
-        return const Color(0xFFFFD700);
-      case 'primeval':
-      default:
-        return AppColors.primaryText;
-    }
+  Future<void> _toggleFavorite(AuctionItem item) async {
+    await _repo.toggleFavorite(item.id);
+    await _load();
+  }
+
+  void _openDetail(AuctionItem item) {
+    Navigator.pushNamed(
+      context,
+      '/auction_item_detail',
+      arguments: item.toJson(),
+    );
   }
 
   @override
@@ -98,124 +55,46 @@ class _AuctionSearchScreenState extends State<AuctionSearchScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.primaryText,
-        title: Text(
-          '\'${widget.query}\' 검색결과',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+      backgroundColor: AppColors.surface,
+      foregroundColor: AppColors.primaryText,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      title: Text(
+        "'${widget.query}' 검색결과",
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
             color: AppColors.primaryText,
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        child: CustomContainerDivided(
-          header: const Text(
-            '아이템 리스트',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: AppColors.primaryText,
-            ),
-          ),
-          children: _filteredList.map((item) {
-            final gradeColor = _getGradeColor(item['grade'] ?? '');
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Container(
-                height: 80,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border, width: 1),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // 카테고리
-                    SizedBox(
-                      width: 55,
-                      child: Text(
-                        item['category'],
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: AppColors.primaryText,
-                        ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _results.isEmpty
+              ? const Center(
+                  child: Text(
+                    '검색 결과가 없습니다.',
+                    style: TextStyle(color: AppColors.secondaryText),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                  itemCount: _results.length,
+                  itemBuilder: (context, index) {
+                    final item = _results[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: AuctionItemTile(
+                        item: item,
+                        isFavorite: item.isFavorite,
+                        onFavoriteToggle: () => _toggleFavorite(item),
+                        onTap: () => _openDetail(item),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-
-                    // 이미지
-                    Image.asset(
-                      item['image'],
-                      width: 36,
-                      height: 36,
-                      fit: BoxFit.cover,
-                    ),
-                    const SizedBox(width: 8),
-
-                    // 장비명 및 세부정보
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item['name'],
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: gradeColor,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                item['grade'],
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFFFD700),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                item['option'],
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: item['optionColor'] as Color,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            item['desc'],
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
     );
   }
 }

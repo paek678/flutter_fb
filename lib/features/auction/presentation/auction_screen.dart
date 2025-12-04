@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 
@@ -18,8 +19,8 @@ class AuctionScreen extends StatefulWidget {
 class _AuctionScreenState extends State<AuctionScreen> {
   final TextEditingController _searchController = TextEditingController();
 
-  // ✅ 싱글톤 레포지토리 인스턴스 (factory InMemoryAuctionRepository() 사용)
-  final InMemoryAuctionRepository _repo = InMemoryAuctionRepository();
+  // Firestore 기반 레포지토리 (내부에서 필요한 경우 메모리 fallback 처리)
+  final FirestoreAuctionRepository _repo = FirestoreAuctionRepository();
 
   // 상승 / 하락 리스트
   List<AuctionPriceRow> _increaseRows = [];
@@ -29,10 +30,12 @@ class _AuctionScreenState extends State<AuctionScreen> {
   // 검색 결과 전환용
   bool _showSearchResult = false;
   String _currentQuery = '';
+  bool _preloadedRepo = false;
 
   @override
   void initState() {
     super.initState();
+    _preloadRepo();
     _loadPriceRows(); // ✅ 레포는 이미 필드에서 생성, 여기서는 데이터만 로딩
   }
 
@@ -42,11 +45,33 @@ class _AuctionScreenState extends State<AuctionScreen> {
     super.dispose();
   }
 
+  Future<void> _preloadRepo() async {
+    if (_preloadedRepo) return;
+    _preloadedRepo = true;
+    try {
+      final items = await _repo.fetchItems();
+      debugPrint(
+        '[AuctionScreen] Firestore repo preloaded, count=${items.length}',
+      );
+    } catch (e) {
+      debugPrint('[AuctionScreen] Firestore preload failed: $e');
+    }
+  }
+
   Future<void> _loadPriceRows() async {
     setState(() => _loadingTable = true);
 
-    final items = await _repo.fetchItems(); // 기존 더미 아이템들
+    final items = await _repo.fetchItems();
     if (!mounted) return;
+
+    if (items.isEmpty) {
+      setState(() {
+        _increaseRows = [];
+        _decreaseRows = [];
+        _loadingTable = false;
+      });
+      return;
+    }
 
     final limited = items.take(5).toList();
     final n = limited.length;

@@ -18,6 +18,36 @@ class AuctionItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget _buildImage() {
+      final path = item.imagePath;
+      final fallback = Image.asset(
+        'assets/images/no_image.png',
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+      );
+
+      if (path == null || path.isEmpty) return fallback;
+
+      if (path.startsWith('http')) {
+        return Image.network(
+          path,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      }
+
+      return Image.asset(
+        path,
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Padding(
@@ -34,12 +64,7 @@ class AuctionItemTile extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.asset(
-                  item.imagePath ?? 'assets/images/no_image.png',
-                  width: 48,
-                  height: 48,
-                  fit: BoxFit.cover,
-                ),
+                child: _buildImage(),
               ),
               const SizedBox(width: 12),
               Expanded(

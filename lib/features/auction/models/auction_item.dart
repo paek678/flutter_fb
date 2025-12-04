@@ -1,16 +1,21 @@
+import 'item_price.dart';
+
 class AuctionItem {
   final int id;
   final String name;
   final int price;
 
-  // ✅ 판매자는 선택사항으로 변경 (UI에서 안 써도 됨)
+  // 판매자는 선택 항목(UI 표시용)
   final String? seller;
 
-  // ✅ 썸네일(자산) 경로
+  // 썸네일(리소스) 경로
   final String? imagePath;
 
-  // ✅ 찜 여부 (기본값 false)
+  // 즐겨찾기 여부 (기본값 false)
   final bool isFavorite;
+
+  // item_prices 컬렉션에서 가져온 가격 정보
+  final ItemPrice? itemPrice;
 
   const AuctionItem({
     required this.id,
@@ -18,7 +23,8 @@ class AuctionItem {
     required this.price,
     this.seller,
     this.imagePath,
-    this.isFavorite = false, // 기본값
+    this.isFavorite = false,
+    this.itemPrice,
   });
 
   AuctionItem copyWith({
@@ -28,6 +34,7 @@ class AuctionItem {
     String? seller,
     String? imagePath,
     bool? isFavorite,
+    ItemPrice? itemPrice,
   }) {
     return AuctionItem(
       id: id ?? this.id,
@@ -36,6 +43,7 @@ class AuctionItem {
       seller: seller ?? this.seller,
       imagePath: imagePath ?? this.imagePath,
       isFavorite: isFavorite ?? this.isFavorite,
+      itemPrice: itemPrice ?? this.itemPrice,
     );
   }
 
@@ -45,8 +53,10 @@ class AuctionItem {
         price: j['price'] as int,
         seller: j['seller'] as String?,
         imagePath: j['imagePath'] as String?,
-        // ✅ JSON에 없으면 false로
         isFavorite: j['isFavorite'] as bool? ?? false,
+        itemPrice: j['itemPrice'] != null
+            ? ItemPrice.fromJson(j['itemPrice'] as Map<String, dynamic>)
+            : null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -56,5 +66,6 @@ class AuctionItem {
         'seller': seller,
         'imagePath': imagePath,
         'isFavorite': isFavorite,
+        'itemPrice': itemPrice?.toJson(),
       };
 }

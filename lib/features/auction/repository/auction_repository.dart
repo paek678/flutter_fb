@@ -1,5 +1,7 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 
+import '../../../core/services/firebase_service.dart';
 import '../models/auction_item.dart';
 import '../models/item_price.dart';
 
@@ -101,6 +103,7 @@ class InMemoryAuctionRepository implements AuctionRepository {
 
     return items
         .map((e) => ItemPrice(
+              itemId: e.id.toString(),
               name: e.name,
               avgPrice: (e.price * 0.97).round(),
               trend: trendFor(e.id),
@@ -229,5 +232,247 @@ class InMemoryAuctionRepository implements AuctionRepository {
     final item = await getItemById(itemId);
     if (item == null) return const [];
     return fetchPriceSeries(item.name, range: range);
+  }
+}
+
+/// Firestore 데이터를 가져와 캐싱하는 구현체 (없을 경우 인메모리 fallback)
+class FirestoreAuctionRepository implements AuctionRepository {
+  FirestoreAuctionRepository._internal({int perItemLimit = 30})
+      : _perItemLimit = perItemLimit;
+
+  static final FirestoreAuctionRepository _instance =
+      FirestoreAuctionRepository._internal();
+
+  factory FirestoreAuctionRepository({int perItemLimit = 30}) {
+    _instance._perItemLimit = perItemLimit;
+    return _instance;
+  }
+
+  final InMemoryAuctionRepository _fallback = InMemoryAuctionRepository();
+
+  List<AuctionItem> _items = <AuctionItem>[];
+  final Map<String, Map<data.PriceRange, List<double>>> _historyByName = {};
+  final Map<String, ItemPrice> _priceByItemId = {};
+  final Set<int> _favorites = <int>{};
+  bool _loaded = false;
+  int _perItemLimit;
+
+  Future<void> _ensureLoaded() async {
+    if (_loaded) return;
+
+    debugPrint('[AuctionRepo] Loading auction listings from Firestore...');
+
+    // item_prices 전체 로드
+    final prices = await FirestoreService.fetchAllItemPrices();
+    _priceByItemId
+      ..clear()
+      ..addEntries(prices.map((p) => MapEntry(p.itemId, p)));
+
+    // 전체 auction_items/{itemId}/listings 로드 (unitPrice 오름차순)
+    final allSimple =
+        await FirestoreService.fetchAllAuctionListingsSimple(
+      perItemLimit: _perItemLimit,
+    );
+
+    final List<AuctionItem> items = [];
+    for (final entry in allSimple.entries) {
+      final listings = entry.value;
+      if (listings.isEmpty) continue;
+      final first = listings.first; // 가장 앞이 최저가
+      final isFav = _favorites.contains(first.id);
+      final itemPrice = _priceByItemId[entry.key];
+      items.add(first.copyWith(isFavorite: isFav, itemPrice: itemPrice));
+    }
+    _items = items;
+
+    // 상세 listings에서 history 수집 (있는 경우만)
+    final allDetail =
+        await FirestoreService.fetchAllAuctionListingsDetail(
+      perItemLimit: 1, // history만 쓰므로 1개면 충분
+    );
+    _historyByName.clear();
+    for (final entry in allDetail.entries) {
+      final listings = entry.value;
+      if (listings.isEmpty) continue;
+      final detail = listings.first;
+      if (detail.history.isNotEmpty) {
+        _historyByName[detail.name] = detail.history;
+      }
+    }
+
+    _loaded = true;
+
+    debugPrint(
+      '[AuctionRepo] Loaded items=${_items.length}, history=${_historyByName.length}',
+    );
+    if (_items.isNotEmpty) {
+      final buf = StringBuffer();
+      buf.writeln('[AuctionRepo] Items detail:');
+      for (final e in _items) {
+        buf.writeln(
+          '  - ${e.toJson()}',
+        );
+      }
+      debugPrint(buf.toString());
+    }
+    if (_historyByName.isNotEmpty) {
+      final buf = StringBuffer();
+      buf.writeln('[AuctionRepo] History detail:');
+      _historyByName.forEach((name, history) {
+        buf.writeln('  * $name');
+        history.forEach((range, list) {
+          buf.writeln('    - ${range.name}: $list');
+        });
+      });
+      debugPrint(buf.toString());
+    }
+  }
+
+  List<ItemPrice> _buildPricesFromItems(List<AuctionItem> items) {
+    String trendFor(int id) {
+      final k = id % 3;
+      if (k == 0) return '-0.8%';
+      if (k == 1) return '+0.6%';
+      return '+1.5%';
+    }
+
+    return items
+        .map((e) => ItemPrice(
+              itemId: e.id.toString(),
+              name: e.name,
+              avgPrice: (e.price * 0.97).round(),
+              trend: trendFor(e.id),
+            ))
+        .toList();
+  }
+
+  @override
+  Future<List<AuctionItem>> fetchItems({String query = ''}) async {
+    try {
+      await _ensureLoaded();
+    } catch (_) {
+      return _fallback.fetchItems(query: query);
+    }
+
+    if (_items.isEmpty) {
+      return _fallback.fetchItems(query: query);
+    }
+
+    if (query.trim().isEmpty) return List<AuctionItem>.from(_items);
+    final q = query.toLowerCase();
+    return _items.where((e) => e.name.toLowerCase().contains(q)).toList();
+  }
+
+  @override
+  Future<AuctionItem?> getItemById(int id) async {
+    try {
+      await _ensureLoaded();
+    } catch (_) {
+      return _fallback.getItemById(id);
+    }
+
+    try {
+      return _items.firstWhere((e) => e.id == id);
+    } catch (_) {
+      return _fallback.getItemById(id);
+    }
+  }
+
+  @override
+  Future<List<ItemPrice>> fetchPrices() async {
+    try {
+      await _ensureLoaded();
+    } catch (_) {
+      return _fallback.fetchPrices();
+    }
+
+    if (_priceByItemId.isNotEmpty) {
+      return _priceByItemId.values.toList();
+    }
+
+    if (_items.isEmpty) return _fallback.fetchPrices();
+    return _buildPricesFromItems(_items);
+  }
+
+  @override
+  Future<void> toggleFavorite(int itemId) async {
+    try {
+      await _ensureLoaded();
+    } catch (_) {
+      // fallback에만 토글
+      return _fallback.toggleFavorite(itemId);
+    }
+
+    final wasFavorite = _favorites.contains(itemId);
+    if (wasFavorite) {
+      _favorites.remove(itemId);
+    } else {
+      _favorites.add(itemId);
+    }
+
+    final index = _items.indexWhere((e) => e.id == itemId);
+    if (index != -1) {
+      final oldItem = _items[index];
+      _items[index] = oldItem.copyWith(isFavorite: !wasFavorite);
+    }
+  }
+
+  @override
+  Future<List<AuctionItem>> fetchFavorites() async {
+    try {
+      await _ensureLoaded();
+    } catch (_) {
+      return _fallback.fetchFavorites();
+    }
+
+    if (_items.isEmpty) return _fallback.fetchFavorites();
+    return _items.where((e) => _favorites.contains(e.id)).toList();
+  }
+
+  @override
+  Future<bool> isFavorite(int itemId) async {
+    try {
+      await _ensureLoaded();
+    } catch (_) {
+      return _fallback.isFavorite(itemId);
+    }
+    return _favorites.contains(itemId);
+  }
+
+  @override
+  Future<List<double>> fetchPriceSeries(
+    String itemName, {
+    required data.PriceRange range,
+  }) async {
+    try {
+      await _ensureLoaded();
+    } catch (_) {
+      return _fallback.fetchPriceSeries(itemName, range: range);
+    }
+
+    final hist = _historyByName[itemName];
+    final series = hist?[range];
+    if (series != null && series.isNotEmpty) {
+      return List<double>.from(series);
+    }
+
+    // history가 없으면 기존 인메모리 로직으로 대체
+    return _fallback.fetchPriceSeries(itemName, range: range);
+  }
+
+  @override
+  Future<List<double>> fetchPriceSeriesById(
+    int itemId, {
+    required data.PriceRange range,
+  }) async {
+    try {
+      final item = await getItemById(itemId);
+      if (item == null) {
+        return _fallback.fetchPriceSeriesById(itemId, range: range);
+      }
+      return fetchPriceSeries(item.name, range: range);
+    } catch (_) {
+      return _fallback.fetchPriceSeriesById(itemId, range: range);
+    }
   }
 }

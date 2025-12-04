@@ -21,6 +21,60 @@ import '../../features/auction/models/auction_item.dart' as auction_simple;
 import '../../features/auction/models/auction_item_data.dart' as auction_detail;
 import 'package:flutter_fb/features/auction/models/item_price.dart';
 
+// PriceRange 문자열을 enum으로 변환
+auction_detail.PriceRange? _rangeFromKey(String key) {
+  switch (key) {
+    case 'd7':
+      return auction_detail.PriceRange.d7;
+    case 'd14':
+      return auction_detail.PriceRange.d14;
+    case 'd30':
+      return auction_detail.PriceRange.d30;
+    case 'd90':
+      return auction_detail.PriceRange.d90;
+    case 'd365':
+      return auction_detail.PriceRange.d365;
+  }
+  return null;
+}
+
+// history 배열을 우선순위(긴 구간 우선)대로 최대 5개까지 매핑
+Map<auction_detail.PriceRange, List<double>> _historyFromArray(
+  List<dynamic>? raw,
+) {
+  if (raw == null) return const {};
+
+  const order = <auction_detail.PriceRange>[
+    auction_detail.PriceRange.d365,
+    auction_detail.PriceRange.d90,
+    auction_detail.PriceRange.d30,
+    auction_detail.PriceRange.d14,
+    auction_detail.PriceRange.d7,
+  ];
+
+  final temp = <auction_detail.PriceRange, List<double>>{};
+  for (final e in raw) {
+    if (e is! Map) continue;
+    final key = e['range']?.toString() ?? '';
+    final range = _rangeFromKey(key);
+    if (range == null) continue;
+
+    final list = (e['values'] as List?)
+            ?.map((v) => (v as num).toDouble())
+            .toList() ??
+        const <double>[];
+
+    temp[range] = list;
+  }
+
+  final entries = order
+      .where(temp.containsKey)
+      .take(5)
+      .map((r) => MapEntry(r, temp[r]!));
+
+  return Map<auction_detail.PriceRange, List<double>>.fromEntries(entries);
+}
+
 // ─────────────────────────────────────────────
 // 1) Notice(공지) 매퍼
 // ─────────────────────────────────────────────
@@ -360,7 +414,9 @@ auction_detail.AuctionItem auctionDetailItemFromListingDoc(
   const double? weightKg = null;
   const String? durability = null;
 
-  const Map<auction_detail.PriceRange, List<double>> history = {};
+  // history 배열을 우선순위대로 최대 5개까지 매핑
+  final Map<auction_detail.PriceRange, List<double>> history =
+      _historyFromArray(data['history'] as List<dynamic>?);
 
   return auction_detail.AuctionItem(
     name: name,
@@ -393,15 +449,32 @@ ItemPrice itemPriceFromFirestoreDoc(
 ) {
   final data = doc.data() ?? <String, dynamic>{};
 
+  final String itemId = (data['itemId'] ?? doc.id) as String;
   final String name =
       (data['itemName'] ?? data['name'] ?? '') as String;
-  final int avgPrice = (data['avgPrice'] ?? 0) as int;
+  final int avgPrice = (data['avgPrice'] as num?)?.toInt() ?? 0;
   final String trend = (data['trend'] ?? '0.0%') as String;
+  final int? lastPrice = (data['lastPrice'] as num?)?.toInt();
+  final int? prevPrice = (data['prevPrice'] as num?)?.toInt();
+  final List<int> recentUnitPrices =
+      (data['recentUnitPrices'] as List<dynamic>?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          const <int>[];
+
+  final Timestamp? tsLatestSoldAt = data['latestSoldAt'] as Timestamp?;
+  final Timestamp? tsUpdatedAt = data['updatedAt'] as Timestamp?;
 
   return ItemPrice(
+    itemId: itemId,
     name: name,
     avgPrice: avgPrice,
     trend: trend,
+    lastPrice: lastPrice,
+    prevPrice: prevPrice,
+    recentUnitPrices: recentUnitPrices,
+    latestSoldAt: tsLatestSoldAt?.toDate(),
+    updatedAt: tsUpdatedAt?.toDate(),
   );
 }
 

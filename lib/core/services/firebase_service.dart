@@ -374,6 +374,16 @@ class FirestoreService {
     return itemPricesFromQuerySnapshot(snap);
   }
 
+  static Future<List<ItemPrice>> fetchAllItemPrices({
+    int limit = 500,
+  }) async {
+    final snap = await _db
+        .collection('item_prices')
+        .limit(limit)
+        .get();
+    return itemPricesFromQuerySnapshot(snap);
+  }
+
   // ---------------------------------------------------------------------------
   // 4-1) Auction: fetch all auction_items
   // ---------------------------------------------------------------------------
