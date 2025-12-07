@@ -5,6 +5,7 @@ import '../model/notice_category.dart';
 import '../repository/notice_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/firebase_service.dart';
 
 class BoardListScreen extends StatefulWidget {
   const BoardListScreen({super.key});
@@ -66,6 +67,7 @@ class _BoardListScreenState extends State<BoardListScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isDetail = _selectedNotice != null;
+    final bool canWrite = FirestoreService.currentUser != null;
 
     return Stack(
       children: [
@@ -162,7 +164,7 @@ class _BoardListScreenState extends State<BoardListScreen> {
         ),
 
         // 🔹 오른쪽 하단 "공지 작성" 버튼 (디테일에서는 감춤)
-        if (!isDetail)
+        if (!isDetail && canWrite)
           Positioned(right: 24, bottom: 24, child: _buildWriteButton(context)),
       ],
     );

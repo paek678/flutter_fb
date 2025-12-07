@@ -278,7 +278,7 @@ class _PriceTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final weekPoints = _buildWeekPoints();
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -334,48 +334,46 @@ class _PriceTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border, width: 1),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: weekPoints.length,
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              color: AppColors.border.withOpacity(0.6),
             ),
-            child: Column(
-              children: weekPoints
-                  .reversed // 최신 날짜가 위로 오도록 역순
-                  .map(
-                    (p) => Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 80,
-                            child: Text(
-                              _formatDate(p.$1),
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.secondaryText,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${p.$2.toStringAsFixed(0)} G',
-                              style: AppTextStyles.body2.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primaryText,
-                              ),
-                            ),
-                          ),
-                        ],
+            itemBuilder: (_, index) {
+              final p = weekPoints.reversed.toList()[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      child: Text(
+                        _formatDate(p.$1),
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.secondaryText,
+                        ),
                       ),
                     ),
-                  )
-                  .toList(),
-            ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${p.$2.toStringAsFixed(0)} G',
+                        style: AppTextStyles.body2.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),

@@ -11,6 +11,7 @@ import '../../../core/theme/app_text_styles.dart';
 
 // 커스텀 검색 필드
 import '../../../core/widgets/custom_text_field.dart';
+import '../../../core/services/firebase_service.dart';
 
 class CommunityListScreen extends StatefulWidget {
   const CommunityListScreen({super.key});
@@ -84,6 +85,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canWrite = FirestoreService.currentUser != null;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -171,7 +174,12 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
           ),
 
           // 🔹 오른쪽 하단 "글 작성" 버튼
-          Positioned(right: 24, bottom: 24, child: _buildWriteButton(context)),
+          if (canWrite)
+            Positioned(
+              right: 24,
+              bottom: 24,
+              child: _buildWriteButton(context),
+            ),
         ],
       ),
     );

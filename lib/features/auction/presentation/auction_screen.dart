@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/custom_text_field.dart';
+import '../../../../core/services/firebase_service.dart';
 
 import '../models/auction_item.dart';
 import '../repository/auction_repository.dart';
@@ -128,6 +129,7 @@ class _AuctionScreenState extends State<AuctionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool canOpenFavorites = FirestoreService.currentUser != null;
     final Widget body = _showSearchResult
         ? AuctionSearchContent(query: _currentQuery)
         : SingleChildScrollView(
@@ -172,17 +174,18 @@ class _AuctionScreenState extends State<AuctionScreen> {
         body,
 
         // 오른쪽 아래 찜목록 버튼
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton(
-            backgroundColor: Colors.white,
-            elevation: 4,
-            shape: const CircleBorder(),
-            onPressed: _openFavoriteList,
-            child: const Icon(Icons.favorite, color: Colors.red),
+        if (canOpenFavorites)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              backgroundColor: Colors.white,
+              elevation: 4,
+              shape: const CircleBorder(),
+              onPressed: _openFavoriteList,
+              child: const Icon(Icons.favorite, color: Colors.red),
+            ),
           ),
-        ),
       ],
     );
   }

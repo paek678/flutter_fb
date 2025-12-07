@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../models/domain/character.dart';
 import '../../models/domain/ranking_row.dart';
 
 import '../../repository/firebase_character_repository.dart';
-// ⭐ 추가: Firebase 구현체 import
+import '../../../../core/services/firebase_service.dart';
+// 추가: Firebase 연동용 import
 
 import '../widgets/page_ranking_row.dart';
 import '../widgets/page_character_search_input.dart';
@@ -14,10 +15,10 @@ import 'character_detail_page.dart';
 class CharacterSearchTab extends StatefulWidget {
   final void Function(int)? onTabChange;
 
-  /// 필요하면 바깥에서 다른 구현체를 주입할 수도 있음
+  /// 필요하면 부모 위젯에서 직접 레포지토리를 주입해서 사용할 수 있도록 함
   final FirebaseCharacterRepository? repository;
 
-  /// 🔹 추가: 초기 검색어
+  /// 추가 옵션: 초기 검색어
   final String? initialQuery;
 
   const CharacterSearchTab({
@@ -40,7 +41,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   // 검색 결과
   List<Character> _searchResults = [];
 
-  // 랭킹 미리보기
+  // 랭킹 표시용 데이터
   List<RankingRow> _rankingRows = [];
   bool _isRankingLoading = true;
 
@@ -57,34 +58,35 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
     '디레지에',
     '시로코',
     '프레이',
-    '카시야스',
     '힐더',
-    '안톤',
     '바칼',
+    '안톤',
+    '카시아스',
   ];
 
   @override
   void initState() {
     super.initState();
 
-    // ⭐ 기본 구현체를 InMemory → Firebase로
+    // 기본 레포지토리는 InMemory가 아닌 Firebase 레포지토리 사용
     _repository = widget.repository ?? FirebaseCharacterRepository();
 
-    // 🔹 initialQuery가 있으면 검색창에 세팅
+    // initialQuery가 있으면 검색창 기본값으로 세팅
     if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
       _controller.text = widget.initialQuery!.trim();
-      // 필요하면 자동 검색까지 하고 싶으면 주석 해제
+      // 필요하면 자동 검색까지 수행하고 싶을 때 아래 주석 해제
       // _searchCharacter();
     }
 
-    _loadRanking(); // 시작 시 랭킹 한 번 불러오기
+    _loadRanking(); // 초기 진입 시 랭킹 프리뷰 불러오기
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final controller = DefaultTabController.maybeOf(context); // ← 이게 되면 제일 깔끔
+    // 상위의 DefaultTabController가 있으면 같은 컨트롤러를 사용
+    final controller = DefaultTabController.maybeOf(context);
     if (controller != null && controller != _tabController) {
       _tabController?.removeListener(_onTabChanged);
       _tabController = controller;
@@ -93,7 +95,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   }
 
   void _onTabChanged() {
-    const myIndex = 0; // 캐릭터 탭이 0번째라고 가정
+    const myIndex = 0; // 이 탭의 인덱스가 0번이라고 가정
 
     if (_tabController == null) return;
 
@@ -116,11 +118,24 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
     try {
       final server = _selectedServer == '전체' ? null : _selectedServer;
 
-      final rows = await _repository.fetchRankingPreview(server: server);
+      // 1) ranking_entries 프리뷰에서 상위 3개
+      List<RankingRow> rows =
+          await _repository.fetchRankingPreview(server: server);
+      rows = rows.take(3).toList();
+
+      // 2) 프리뷰가 비어 있으면 collectionGroup에서 상위 3개 fallback
+      if (rows.isEmpty) {
+        final fromAll = await FirestoreService.fetchAllRankingRows(
+          serverId: server,
+          limit: 3,
+        );
+        fromAll.sort((a, b) => b.fame.compareTo(a.fame));
+        rows = fromAll.take(3).toList();
+      }
 
       if (!mounted) return;
       setState(() {
-        _rankingRows = rows;
+        _rankingRows = rows; // 상위 3개만 표시
         _isRankingLoading = false;
       });
     } catch (e) {
@@ -129,7 +144,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
         _rankingRows = [];
         _isRankingLoading = false;
       });
-      // 필요하면 스낵바로 에러 표시
+      // 필요하면 스낵바 등으로 에러 메시지 출력
     }
   }
 
@@ -138,7 +153,11 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
     if (query.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('캐릭터 이름을 입력하세요.')));
+      ).showSnackBar(
+        const SnackBar(
+          content: Text('캐릭터 이름을 입력해주세요.'),
+        ),
+      );
       return;
     }
 
@@ -164,7 +183,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
       setState(() {
         _searchResults = [];
       });
-      // 에러 표현하고 싶으면 여기서 처리
+      // 에러 로그만 찍고, 필요하면 추가 예외 처리
     }
   }
 
@@ -179,7 +198,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   Widget build(BuildContext context) {
     super.build(context);
 
-    // 🔹 검색 결과 화면
+    // 검색 결과 화면
     if (_isSearching) {
       return Padding(
         padding: const EdgeInsets.all(16),
@@ -204,7 +223,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
       );
     }
 
-    // 🔹 기본 검색 + 랭킹 미리보기 화면
+    // 기본 검색 + 랭킹 프리뷰 화면
     return SafeArea(
       child: SingleChildScrollView(
         child: Padding(
@@ -228,13 +247,13 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
               _isRankingLoading
                   ? const Center(child: CircularProgressIndicator())
                   : RankingTableContainer(
-                      titleDate: '11월 9일',
+                      titleDate: '11월 9일 기준',
                       serverName: _selectedServer,
                       rows: _rankingRows,
                       onMoreTap: () {
                         widget.onTabChange?.call(1);
                       },
-                      // ⭐ 추가: 랭킹 row 눌렀을 때 → characterId로 상세 조회 후 이동
+                      // 추가: 랭킹 row를 탭하면 characterId로 상세 조회 화면으로 이동
                       onRowTap: (row) async {
                         final character = await _repository.getCharacterById(
                           row.characterId,
