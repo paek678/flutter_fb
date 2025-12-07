@@ -19,7 +19,6 @@ import 'package:flutter_fb/features/character/models/ui/buff_slot.dart';
 
 // 탭들
 import 'package:flutter_fb/features/character/presentation/widgets/detail_buff_tab.dart';
-import 'package:flutter_fb/features/character/presentation/widgets/skill_bloom_tab.dart';
 import '../widgets/detail_equipment_tab.dart';
 import '../widgets/detail_basic_stat_tab.dart';
 import '../widgets/detail_detail_stat_tab.dart';
@@ -49,9 +48,6 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
     '세부스탯',
     '아바타&크리쳐',
     '버프강화',
-    '스킬개화',
-    '딜표',
-    '스킬정보',
   ];
 
   late final FirebaseCharacterRepository _repository;
@@ -61,7 +57,7 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
   bool _loading = true;
   String? _error;
 
-  final List<Widget?> _builtTabs = List.filled(8, null);
+  final List<Widget?> _builtTabs = List.filled(5, null);
 
   @override
   void initState() {
@@ -100,6 +96,11 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
           '[CharacterDetailView] detail loaded id=${widget.character.id} stats=${info.stats} detailStats=${info.detailStats} '
           'equipments=${info.equipments.length} avatars=${info.avatars.length} buffItems=${info.buffItems.length}',
         );
+        for (final b in info.buffItems) {
+          debugPrint(
+            '[CharacterDetailView] buffItem category=${b.category} name=${b.name} grade=${b.grade} option=${b.option} imagePath=${b.imagePath}',
+          );
+        }
       } else {
         debugPrint(
           '[CharacterDetailView] detail null, using fallback for id=${widget.character.id}',
@@ -301,14 +302,10 @@ class _CharacterDetailViewState extends State<CharacterDetailView>
         _builtTabs[i] = BuffTab(slots: buffSlots);
         break;
 
-      case 5:
-        _builtTabs[i] = const SkillBloomTab();
-        break;
-
       default:
         _builtTabs[i] = Center(
           child: Text(
-            i == 6 ? '딜표 데이터 (추후 연동)' : '스킬 정보 (추후 연동)',
+            '탭 데이터가 없습니다.',
             style: AppTextStyles.body1,
           ),
         );

@@ -889,13 +889,56 @@ class FirestoreService {
       }
     }
 
+    // skill.buff.* 형태까지 지원하는 버전
+    void _addBuffFromDocNested(
+      DocumentSnapshot<Map<String, dynamic>> doc, {
+      String? creatureFallbackCategory,
+    }) {
+      if (!doc.exists) return;
+      final raw = doc.data()?['raw'] as Map<String, dynamic>? ?? {};
+      final skill = raw['skill'] as Map<String, dynamic>? ?? const {};
+      final buff = skill['buff'] as Map<String, dynamic>? ?? const {};
+
+      // 1) 장비 버프
+      final equipList = buff['equipment'] ?? raw['equipment'];
+      if (equipList is List) {
+        for (final e in equipList.whereType<Map<String, dynamic>>()) {
+          _addBuffItemFromMap(e);
+        }
+      }
+
+      // 2) 아바타 버프
+      final avatarList = buff['avatar'] ?? raw['avatar'];
+      if (avatarList is List) {
+        for (final a in avatarList.whereType<Map<String, dynamic>>()) {
+          _addBuffItemFromMap(a);
+        }
+      }
+
+      // 3) 크리쳐 버프
+      final creature = buff['creature'] ?? raw['creature'];
+      if (creature is Map<String, dynamic>) {
+        _addBuffItemFromMap(
+          creature,
+          fallbackCategory: creatureFallbackCategory ?? '크리쳐',
+        );
+      } else if (creature is List) {
+        for (final c in creature.whereType<Map<String, dynamic>>()) {
+          _addBuffItemFromMap(
+            c,
+            fallbackCategory: creatureFallbackCategory ?? '크리쳐',
+          );
+        }
+      }
+    }
     // 실제로 세 문서를 모두 처리
-    _addBuffFromDoc(buffEquipDoc);
-    _addBuffFromDoc(buffAvatarDoc);
-    _addBuffFromDoc(
+    _addBuffFromDocNested(buffEquipDoc);
+    _addBuffFromDocNested(buffAvatarDoc);
+    _addBuffFromDocNested(
       buffCreatureDoc,
       creatureFallbackCategory: '크리쳐',
     );
+
 
     // ───────────────────────────── summary (Character) ─────────────────────────────
     final summary = Character.fromJson(charDoc.data()!, id: charDoc.id);

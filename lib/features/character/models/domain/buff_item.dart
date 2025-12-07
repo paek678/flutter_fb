@@ -1,10 +1,10 @@
 // lib/features/character/models/buff_item.dart
 class BuffItem {
-  final String category; // 상의 아바타, 크리쳐, 무기 ...
-  final String imagePath; // 아이콘 경로 (asset 또는 url)
+  final String category; // 버프 아바타, 크리쳐 무기 ...
+  final String imagePath; // 이미지경로 (asset 또는 url)
   final String name; // 아이템 이름
-  final String grade; // 등급: 레어, 에픽, 레전더리 등
-  final String option; // 옵션 텍스트, 없으면 "" (빈 문자열)
+  final String grade; // 등급: 희귀, 에픽, 전설 등
+  final String option; // 옵션 텍스트. 없으면 "" (빈문자열)
 
   const BuffItem({
     required this.category,
