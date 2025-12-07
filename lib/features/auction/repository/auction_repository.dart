@@ -88,6 +88,18 @@ class InMemoryAuctionRepository implements AuctionRepository {
         price: estPrice + rnd.nextInt(500), // 약간 가감
         seller: seller,
         imagePath: src.imagePath, // ✅ 썸네일 경로 전달
+        rarity: src.rarity,
+        rarityCode: src.rarityCode,
+        type: src.type,
+        subType: src.subType,
+        levelLimit: src.levelLimit,
+        attack: src.attack,
+        intelligence: src.intelligence,
+        combatPower: src.combatPower,
+        options: src.options,
+        weightKg: src.weightKg,
+        durability: src.durability,
+        history: src.history,
       );
     });
   }
@@ -273,32 +285,54 @@ class FirestoreAuctionRepository implements AuctionRepository {
         await FirestoreService.fetchAllAuctionListingsSimple(
       perItemLimit: _perItemLimit,
     );
-
-    final List<AuctionItem> items = [];
-    for (final entry in allSimple.entries) {
-      final listings = entry.value;
-      if (listings.isEmpty) continue;
-      final first = listings.first; // 가장 앞이 최저가
-      final isFav = _favorites.contains(first.id);
-      final itemPrice = _priceByItemId[entry.key];
-      items.add(first.copyWith(isFavorite: isFav, itemPrice: itemPrice));
-    }
-    _items = items;
-
-    // 상세 listings에서 history 수집 (있는 경우만)
     final allDetail =
         await FirestoreService.fetchAllAuctionListingsDetail(
-      perItemLimit: 1, // history만 쓰므로 1개면 충분
+      perItemLimit: _perItemLimit,
     );
+
+    final List<AuctionItem> items = [];
     _historyByName.clear();
-    for (final entry in allDetail.entries) {
-      final listings = entry.value;
-      if (listings.isEmpty) continue;
-      final detail = listings.first;
-      if (detail.history.isNotEmpty) {
-        _historyByName[detail.name] = detail.history;
+    for (final entry in allSimple.entries) {
+      final simpleListings = entry.value;
+      if (simpleListings.isEmpty) continue;
+      final simpleFirst = simpleListings.first; // 최저가
+
+      final detailListings = allDetail[entry.key];
+      final data.AuctionItem? detailFirst =
+          (detailListings != null && detailListings.isNotEmpty)
+              ? detailListings.first
+              : null;
+
+      // history 수집
+      if (detailFirst != null && detailFirst.history.isNotEmpty) {
+        _historyByName[detailFirst.name] = detailFirst.history;
       }
+
+      final isFav = _favorites.contains(simpleFirst.id);
+      final itemPrice = _priceByItemId[entry.key];
+
+      items.add(
+        simpleFirst.copyWith(
+          isFavorite: isFav,
+          itemPrice: itemPrice,
+          rarity: detailFirst?.rarity,
+          rarityCode: detailFirst?.rarityCode,
+          type: detailFirst?.type,
+          subType: detailFirst?.subType,
+          levelLimit: detailFirst?.levelLimit,
+          attack: detailFirst?.attack,
+          intelligence: detailFirst?.intelligence,
+          combatPower: detailFirst?.combatPower,
+          options: detailFirst?.options,
+          weightKg: detailFirst?.weightKg,
+          durability: detailFirst?.durability,
+          history: detailFirst?.history,
+          imagePath: detailFirst?.imagePath ?? simpleFirst.imagePath,
+          // name/price/seller/id는 simpleFirst 기반
+        ),
+      );
     }
+    _items = items;
 
     _loaded = true;
 

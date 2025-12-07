@@ -38,7 +38,7 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
       _initializedFavorite = true;
     }
 
-    // 이름 기준으로 정적 소스 아이템 한 번 더 찾아서 (희귀도/상세 정보 등) 묶어 사용
+    // 이름 기준으로 정적 소스 아이템 한 번 더 찾아서 (fallback용)
     final srcItem = src.kAuctionItems.cast<src.AuctionItem?>().firstWhere(
       (e) => e?.name == item.name,
       orElse: () => null,
@@ -114,7 +114,7 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
                 child: TabBarView(
                   children: [
                     // 1) 시세 탭
-                    _PriceTab(srcItem: srcItem),
+                    _PriceTab(item: item, srcItem: srcItem),
 
                     // 2) 상세 정보 탭
                     _DetailTab(item: item, srcItem: srcItem),
@@ -223,13 +223,37 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
 /// 시세 탭: 라인 차트 + 최근 일별 내역 리스트
 /// ---------------------------------------------------------------------------
 class _PriceTab extends StatelessWidget {
+  final AuctionItem item;
   final src.AuctionItem? srcItem;
 
-  const _PriceTab({required this.srcItem});
+  const _PriceTab({required this.item, required this.srcItem});
 
-  // data에서 최근 7일 시세만 사용
-  List<(DateTime date, double price)> _buildWeekPoints(src.AuctionItem s) {
-    final series = src.fullSeriesOf(s, src.PriceRange.d7);
+  // data에서 최근 7일 시세만 사용 (item.history 우선, 없으면 정적 데이터 fallback)
+  List<(DateTime date, double price)> _buildWeekPoints() {
+    List<double> series = [];
+
+    // 1) 로드된 상세 history 사용
+    final hist = item.history;
+    if (hist != null && hist.containsKey(src.PriceRange.d7)) {
+      series = hist[src.PriceRange.d7] ?? const [];
+    }
+
+    // 2) itemPrice에서 최근 거래가 fallback
+    if (series.isEmpty) {
+      final recent = item.itemPrice?.recentUnitPrices ?? const <int>[];
+      if (recent.isNotEmpty) {
+        series = recent
+            .take(7)
+            .map((e) => e.toDouble())
+            .toList(growable: false);
+      }
+    }
+
+    // 2) 정적 데이터 fallback
+    if (series.isEmpty && srcItem != null) {
+      series = src.fullSeriesOf(srcItem!, src.PriceRange.d7);
+    }
+
     if (series.isEmpty) return const [];
 
     final now = DateTime.now();
@@ -252,13 +276,7 @@ class _PriceTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (srcItem == null) {
-      return const Center(
-        child: Text('시세 데이터가 없습니다.', style: AppTextStyles.body2),
-      );
-    }
-
-    final weekPoints = _buildWeekPoints(srcItem!);
+    final weekPoints = _buildWeekPoints();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -376,67 +394,81 @@ class _DetailTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (srcItem != null) {
-      final s = srcItem!;
+    final rarity = item.rarity ?? srcItem?.rarity ?? '';
+    final type = item.type ?? srcItem?.type ?? '';
+    final subType = item.subType ?? srcItem?.subType ?? '';
+    final levelLimit = item.levelLimit ?? srcItem?.levelLimit;
+    final intelligence = item.intelligence ?? srcItem?.intelligence;
+    final combatPower = item.combatPower ?? srcItem?.combatPower;
+    final weightKg = item.weightKg ?? srcItem?.weightKg;
+    final durability = item.durability ?? srcItem?.durability;
+    final attack = item.attack ??
+        srcItem?.attack ??
+        const src.AttackStats(physical: 0, magical: 0, independent: 0);
+    final options = item.options ?? srcItem?.options ?? const <String>[];
+
+    final hasDetail = rarity.isNotEmpty || type.isNotEmpty || options.isNotEmpty;
+
+    if (!hasDetail) {
+      // 최소 정보 fallback
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
           _SectionTitle('기본 정보'),
           const SizedBox(height: 8),
-          _KeyValueCard(
-            entries: [
-              if (s.type.isNotEmpty) ('장비 종류', '${s.type} / ${s.subType}'),
-              ('등급', s.rarity),
-              ('착용 레벨', '${s.levelLimit}'),
-              ('지능', '${s.intelligence}'),
-              ('전투력', '${s.combatPower}'),
-              if (s.weightKg != null) ('무게(kg)', '${s.weightKg}'),
-              if (s.durability != null) ('내구도', '${s.durability}'),
-            ],
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border, width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                '추가 상세 데이터가 없어 기본 정보만 표시합니다.\n'
+                '이름: ${item.name}\n가격: ${item.price} G',
+                style: AppTextStyles.body2.copyWith(height: 1.6),
+              ),
+            ),
           ),
-
-          const SizedBox(height: 16),
-          _SectionTitle('공격력'),
-          const SizedBox(height: 8),
-          _KeyValueCard(
-            entries: [
-              ('물리 공격력', '${s.attack.physical}'),
-              ('마법 공격력', '${s.attack.magical}'),
-              ('독립 공격력', '${s.attack.independent}'),
-            ],
-          ),
-
-          if (s.options.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _SectionTitle('옵션'),
-            const SizedBox(height: 8),
-            _OptionList(options: s.options),
-          ],
         ],
       );
     }
 
-    // srcItem 이 없을 때는 최소한의 정보만 보여줌
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
         _SectionTitle('기본 정보'),
         const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border, width: 1),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              '추가 상세 데이터가 없어 기본 정보만 표시합니다.\n'
-              '이름: ${item.name}\n가격: ${item.price} G',
-              style: AppTextStyles.body2.copyWith(height: 1.6),
-            ),
-          ),
+        _KeyValueCard(
+          entries: [
+            if (type.isNotEmpty) ('장비 종류', '$type / $subType'),
+            if (rarity.isNotEmpty) ('등급', rarity),
+            if (levelLimit != null) ('착용 레벨', '$levelLimit'),
+            if (intelligence != null) ('지능', '$intelligence'),
+            if (combatPower != null) ('전투력', '$combatPower'),
+            if (weightKg != null) ('무게(kg)', '$weightKg'),
+            if (durability != null) ('내구도', '$durability'),
+          ],
         ),
+
+        const SizedBox(height: 16),
+        _SectionTitle('공격력'),
+        const SizedBox(height: 8),
+        _KeyValueCard(
+          entries: [
+            ('물리 공격력', '${attack.physical}'),
+            ('마법 공격력', '${attack.magical}'),
+            ('독립 공격력', '${attack.independent}'),
+          ],
+        ),
+
+        if (options.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _SectionTitle('옵션'),
+          const SizedBox(height: 8),
+          _OptionList(options: options),
+        ],
       ],
     );
   }

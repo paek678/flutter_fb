@@ -1,4 +1,5 @@
 // lib/core/services/firestore_mappers.dart
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 // ── board 쪽 공지 모델 ──
@@ -71,6 +72,39 @@ Map<auction_detail.PriceRange, List<double>> _historyFromArray(
       .where(temp.containsKey)
       .take(5)
       .map((r) => MapEntry(r, temp[r]!));
+
+  return Map<auction_detail.PriceRange, List<double>>.fromEntries(entries);
+}
+
+// 최근 가격 리스트(최신순 가정)을 PriceRange 순서(d7 -> d365)로 최대 5개까지 매핑
+Map<auction_detail.PriceRange, List<double>> _historyFromRecentPrices(
+  List<dynamic>? raw,
+) {
+  if (raw == null) return const {};
+
+  final values = raw
+      .map((e) {
+        if (e is num) return e.toDouble();
+        return double.tryParse(e.toString());
+      })
+      .whereType<double>()
+      .toList();
+
+  if (values.isEmpty) return const {};
+
+  const ranges = <auction_detail.PriceRange>[
+    auction_detail.PriceRange.d7,
+    auction_detail.PriceRange.d14,
+    auction_detail.PriceRange.d30,
+    auction_detail.PriceRange.d90,
+    auction_detail.PriceRange.d365,
+  ];
+
+  final count = min(values.length, ranges.length);
+  final entries = List.generate(
+    count,
+    (i) => MapEntry(ranges[i], <double>[values[i]]),
+  );
 
   return Map<auction_detail.PriceRange, List<double>>.fromEntries(entries);
 }
@@ -293,6 +327,30 @@ List<AppUser> appUsersFromQuerySnapshot(
 // 7) 🔽 경매 관련 매퍼들
 // ─────────────────────────────────────────────
 
+String? _extractStringStatus(
+  List<dynamic>? statuses,
+  String keyword,
+) {
+  if (statuses == null) return null;
+
+  for (final dynamic e in statuses) {
+    if (e is Map<String, dynamic>) {
+      final String name = (e['name'] ?? '') as String;
+      if (name.contains(keyword)) {
+        final dynamic v = e['value'];
+        return v?.toString();
+      }
+    }
+  }
+  return null;
+}
+
+double? _parseWeightKg(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  final cleaned = raw.replaceAll(RegExp(r'[^0-9.\\-]'), '');
+  return double.tryParse(cleaned);
+}
+
 /// Firestore auction_items/{itemId}/listings/{auctionNo}
 /// → 간단 리스트용 AuctionItem (id, name, price, seller?, imagePath?)
 auction_simple.AuctionItem auctionSimpleItemFromListingDoc(
@@ -407,16 +465,25 @@ auction_detail.AuctionItem auctionDetailItemFromListingDoc(
 
   // 옵션은 itemExplainDetail에서 줄바꿈 기준으로 나누기
   final List<String> options =
-      _extractOptions(data['itemExplainDetail']);
+      _extractOptions(data['itemExplainDetail'] ?? data['itemExplain']);
 
   final String imagePath = (data['imagePath'] ?? '') as String;
 
-  const double? weightKg = null;
-  const String? durability = null;
+  final String? durability = _extractStringStatus(itemStatus, '내구도');
+  final double? weightKg =
+      _parseWeightKg(_extractStringStatus(itemStatus, '무게'));
+
+  final Map<auction_detail.PriceRange, List<double>> historyFromDoc =
+      _historyFromArray(data['history'] as List<dynamic>?);
+  final dynamic recentRaw = data['recentPrices'] ?? data['recentUnitPrices'];
 
   // history 배열을 우선순위대로 최대 5개까지 매핑
   final Map<auction_detail.PriceRange, List<double>> history =
-      _historyFromArray(data['history'] as List<dynamic>?);
+      historyFromDoc.isNotEmpty
+          ? historyFromDoc
+          : _historyFromRecentPrices(
+              recentRaw is List ? recentRaw : null,
+            );
 
   return auction_detail.AuctionItem(
     name: name,
