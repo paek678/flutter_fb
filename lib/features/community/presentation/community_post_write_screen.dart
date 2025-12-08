@@ -1,5 +1,6 @@
 // lib/features/community/presentation/community_post_write_screen.dart
 import 'package:flutter/material.dart';
+import '../../../core/services/firebase_service.dart';
 
 // 공통 테마
 import '../../../core/theme/app_colors.dart';
@@ -52,17 +53,19 @@ class _CommunityPostWriteScreenState extends State<CommunityPostWriteScreen> {
 
     setState(() => _submitting = true);
 
-    // 💡 docId를 null로 설정하여 Firestore에서 자동 생성되도록 유도
-    // (CommunityPost 모델에 docId 필드가 있다고 가정)
+    final displayName = FirestoreService.currentUser?.displayName?.trim();
+    final authorName =
+        (displayName == null || displayName.isEmpty) ? '나' : displayName;
+
     final post = CommunityPost(
-      id: 0, // Firestore 문서 ID는 생성 시점에 null
+      id: 0, // Firestore 문서 ID는 일단 null
       title: _titleCtrl.text.trim(),
       content: _contentCtrl.text.trim(),
-      author: '나', // TODO: 로그인 사용자명으로 교체
+      author: authorName,
       createdAt: DateTime.now(),
       category: PostCategory.general, // 카테고리 고정
       views: 0,
-      likes: 0, // 좋아요 필드 추가 (이전 코드에서 누락되어 있었다면 추가)
+      likes: 0, // 좋아요는 초기값
       commentCount: 0,
     );
 

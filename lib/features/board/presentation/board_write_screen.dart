@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/services/firebase_service.dart';
 
 // 공지 관련
 import '../model/notice.dart';
@@ -54,12 +55,16 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
 
     setState(() => _submitting = true);
 
+    final displayName = FirestoreService.currentUser?.displayName?.trim();
+    final authorName =
+        (displayName == null || displayName.isEmpty) ? '나' : displayName;
+
     final now = DateTime.now();
     final draft = Notice(
       id: 0,
       title: _titleCtrl.text.trim(),
       content: _contentCtrl.text.trim(),
-      author: '운영팀',
+      author: authorName,
       createdAt: now,
       category: _category,
       pinned: false,
@@ -395,4 +400,4 @@ class _SectionTitle extends StatelessWidget {
       ],
     );
   }
-}
+      author: authorName,
