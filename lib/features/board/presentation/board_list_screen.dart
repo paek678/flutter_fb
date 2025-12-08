@@ -67,7 +67,8 @@ class _BoardListScreenState extends State<BoardListScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isDetail = _selectedNotice != null;
-    final bool canWrite = FirestoreService.currentUser != null;
+    // 로그인 여부와 관계없이 버튼 노출
+    const bool canWrite = true;
 
     return Stack(
       children: [

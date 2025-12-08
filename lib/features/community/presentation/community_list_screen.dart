@@ -85,7 +85,8 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canWrite = FirestoreService.currentUser != null;
+    // 로그인 상태와 무관하게 글쓰기 버튼 노출
+    const canWrite = true;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
