@@ -3,7 +3,6 @@ import '../domain/equipment_item.dart';
 
 /// UI에서 사용할 고정 장비 카테고리 목록
 const List<String> kEquipmentCategories = [
-  '세트',
   '무기',
   '칭호',
   '상의',
@@ -38,6 +37,7 @@ List<EquipmentSlot> buildSlotsFromItems(List<EquipmentItem> items) {
   final Map<String, EquipmentItem> mapByCategory = {};
 
   for (final item in items) {
+    if (item.category == '세트') continue;
     // 같은 카테고리 여러 개면 마지막 것이 덮어씀
     mapByCategory[item.category] = item;
   }
