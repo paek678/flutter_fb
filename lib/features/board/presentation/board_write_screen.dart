@@ -57,7 +57,7 @@ class _NoticeWriteScreenState extends State<NoticeWriteScreen> {
 
     final displayName = FirestoreService.currentUser?.displayName?.trim();
     final authorName =
-        (displayName == null || displayName.isEmpty) ? '나' : displayName;
+        (displayName == null || displayName.isEmpty) ? '익명' : displayName;
 
     final now = DateTime.now();
     final draft = Notice(
@@ -400,4 +400,4 @@ class _SectionTitle extends StatelessWidget {
       ],
     );
   }
-      author: authorName,
+}
