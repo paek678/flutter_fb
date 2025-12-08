@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_fb/features/character/presentation/pages/character_detail_page.dart';
+import 'package:flutter_fb/features/character/presentation/pages/character_search_result.dart';
+import 'package:flutter_fb/features/character/repository/firebase_character_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 
@@ -18,11 +21,66 @@ class CustomTopAppBar extends StatefulWidget implements PreferredSizeWidget {
 
 class _CustomTopAppBarState extends State<CustomTopAppBar> {
   final TextEditingController _controller = TextEditingController();
+  final FirebaseCharacterRepository _repository =
+      const FirebaseCharacterRepository();
+  bool _searching = false;
 
-  void _onSearch() {
+  Future<void> _onSearch() async {
     final query = _controller.text.trim();
     if (query.isEmpty) return;
-    Navigator.pushNamed(context, '/character_search', arguments: query);
+
+    if (_searching) return;
+    setState(() => _searching = true);
+
+    try {
+      final results = await _repository.searchCharacters(name: query);
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AppBar(
+              title: Text('검색 결과', style: AppTextStyles.subtitle),
+              backgroundColor: AppColors.surface,
+              foregroundColor: AppColors.primaryText,
+            ),
+            body: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: CharacterSearchResult(
+                      query: query,
+                      results: results,
+                      onCharacterSelected: (character) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                CharacterDetailView(character: character),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('캐릭터 검색 중 오류가 발생했습니다.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _searching = false);
+      }
+    }
   }
 
   @override
@@ -64,9 +122,15 @@ class _CustomTopAppBarState extends State<CustomTopAppBar> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.search),
+                    icon: _searching
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.search),
                     color: AppColors.secondaryText,
-                    onPressed: _onSearch,
+                    onPressed: _searching ? null : _onSearch,
                   ),
                 ],
               ),

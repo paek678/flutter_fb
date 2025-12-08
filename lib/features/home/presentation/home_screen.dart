@@ -32,6 +32,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _bottomIndex = 1;
 
+  void _handleBottomTab(BuildContext context, int index) {
+    setState(() => _bottomIndex = index);
+
+    if (index == 1) {
+      // Home 탭과 동일한 첫 번째 TabBar 탭으로 이동
+      DefaultTabController.of(context)?.animateTo(0);
+    } else if (index == 2) {
+      Navigator.pushNamed(context, '/settings');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -65,9 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        bottomNavigationBar: CustomBottomNavBar(
-          currentIndex: _bottomIndex,
-          onTabChanged: (index) => setState(() => _bottomIndex = index),
+        bottomNavigationBar: Builder(
+          builder: (bottomNavContext) => CustomBottomNavBar(
+            currentIndex: _bottomIndex,
+            onTabChanged: (index) => _handleBottomTab(bottomNavContext, index),
+          ),
         ),
       ),
     );

@@ -36,13 +36,7 @@ class CustomBottomNavBar extends StatelessWidget {
           type: BottomNavigationBarType.fixed,
           elevation: 0,
           currentIndex: currentIndex,
-          onTap: (index) {
-            if (index == 2) {
-              Navigator.pushNamed(context, '/settings');
-            } else {
-              onTabChanged(index);
-            }
-          },
+          onTap: onTabChanged,
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.notifications_none_outlined),

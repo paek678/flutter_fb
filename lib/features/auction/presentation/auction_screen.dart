@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/custom_text_field.dart';
@@ -20,7 +18,7 @@ class AuctionScreen extends StatefulWidget {
 class _AuctionScreenState extends State<AuctionScreen> {
   final TextEditingController _searchController = TextEditingController();
 
-  // Firestore 기반 레포지토리 (내부에서 필요한 경우 메모리 fallback 처리)
+  // Firestore 기반 레포지토리 (추후 필요 시 메모리 fallback 처리 예정)
   final FirestoreAuctionRepository _repo = FirestoreAuctionRepository();
 
   // 상승 / 하락 리스트
@@ -28,7 +26,7 @@ class _AuctionScreenState extends State<AuctionScreen> {
   List<AuctionPriceRow> _decreaseRows = [];
   bool _loadingTable = true;
 
-  // 검색 결과 전환용
+  // 검색 결과 화면 표시 여부
   bool _showSearchResult = false;
   String _currentQuery = '';
   bool _preloadedRepo = false;
@@ -37,7 +35,8 @@ class _AuctionScreenState extends State<AuctionScreen> {
   void initState() {
     super.initState();
     _preloadRepo();
-    _loadPriceRows(); // ✅ 레포는 이미 필드에서 생성, 여기서는 데이터만 로딩
+    // 경매 시세 테이블을 미리 로드해서 구성 (초기 진입 시 한 번만 호출)
+    _loadPriceRows();
   }
 
   @override
@@ -59,10 +58,17 @@ class _AuctionScreenState extends State<AuctionScreen> {
     }
   }
 
+  double? _parseTrendToDouble(String? trend) {
+    if (trend == null || trend.trim().isEmpty) return null;
+    final cleaned = trend.replaceAll('%', '').trim();
+    return double.tryParse(cleaned);
+  }
+
   Future<void> _loadPriceRows() async {
     setState(() => _loadingTable = true);
 
     final items = await _repo.fetchItems();
+    final prices = await _repo.fetchPrices();
     if (!mounted) return;
 
     if (items.isEmpty) {
@@ -74,37 +80,62 @@ class _AuctionScreenState extends State<AuctionScreen> {
       return;
     }
 
-    final limited = items.take(5).toList();
-    final n = limited.length;
+    final priceMap = {for (final p in prices) p.itemId: p};
 
-    final rand = Random();
+    final parsedRows = <AuctionPriceRow>[];
+    for (final item in items) {
+      final trendString =
+          item.itemPrice?.trend ?? priceMap[item.id.toString()]?.trend;
+      final trendValue = _parseTrendToDouble(trendString);
+      if (trendValue == null) continue;
+
+      parsedRows.add(
+        AuctionPriceRow(
+          rank: 0,
+          item: item,
+          changePercent: trendValue,
+        ),
+      );
+    }
+
+    if (parsedRows.isEmpty) {
+      setState(() {
+        _increaseRows = [];
+        _decreaseRows = [];
+        _loadingTable = false;
+      });
+      return;
+    }
+
+    final incRows = parsedRows
+        .where((row) => row.changePercent >= 0)
+        .toList()
+      ..sort((a, b) => b.changePercent.compareTo(a.changePercent));
+
+    final decRows = parsedRows
+        .where((row) => row.changePercent < 0)
+        .toList()
+      ..sort((a, b) => a.changePercent.compareTo(b.changePercent));
+
+    List<AuctionPriceRow> buildTopFive(List<AuctionPriceRow> source) {
+      final limited = source.take(5).toList();
+      return [
+        for (int i = 0; i < limited.length; i++)
+          AuctionPriceRow(
+            rank: i + 1,
+            item: limited[i].item,
+            changePercent: limited[i].changePercent,
+          ),
+      ];
+    }
 
     setState(() {
-      _increaseRows = [
-        for (int i = 0; i < n; i++)
-          AuctionPriceRow(
-            rank: i + 1,
-            item: limited[i],
-            // 1.0 ~ 7.0% 사이 랜덤 상승률
-            changePercent: 1 + rand.nextDouble() * 6,
-          ),
-      ];
-
-      _decreaseRows = [
-        for (int i = 0; i < n; i++)
-          AuctionPriceRow(
-            rank: i + 1,
-            item: limited.reversed.toList()[i],
-            // -1.0 ~ -7.0% 사이 랜덤 하락률
-            changePercent: -(1 + rand.nextDouble() * 6),
-          ),
-      ];
-
+      _increaseRows = buildTopFive(incRows);
+      _decreaseRows = buildTopFive(decRows);
       _loadingTable = false;
     });
   }
 
-  // 검색 엔터시 검색 결과 모드로 전환
   void _openSearchPage(String value) {
     final q = value.trim();
     if (q.isEmpty) return;
@@ -148,18 +179,18 @@ class _AuctionScreenState extends State<AuctionScreen> {
                 if (_loadingTable)
                   const Center(child: CircularProgressIndicator())
                 else ...[
-                  // 금일 시세 상승률 TOP
+                  // 금일 시세 상승 TOP
                   AuctionPriceTableContainer(
-                    title: '금일 시세 상승률 TOP',
+                    title: '금일 시세 상승 TOP',
                     rows: _increaseRows,
                     isIncrease: true,
                     onRowTap: (row) => _openDetail(row.item),
                   ),
                   const SizedBox(height: 16),
 
-                  // 금일 시세 하락률 TOP
+                  // 금일 시세 하락 TOP
                   AuctionPriceTableContainer(
-                    title: '금일 시세 하락률 TOP',
+                    title: '금일 시세 하락 TOP',
                     rows: _decreaseRows,
                     isIncrease: false,
                     onRowTap: (row) => _openDetail(row.item),

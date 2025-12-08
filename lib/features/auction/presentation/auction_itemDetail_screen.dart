@@ -34,7 +34,9 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
 
     // 최초 빌드에서만 item.isFavorite 값을 state로 복사
     if (!_initializedFavorite) {
-      _isFavorite = item.isFavorite;
+      final userFav = FirestoreService.currentUser?.favorites ?? const <int>{};
+      final isUserFavorite = userFav.contains(item.id);
+      _isFavorite = item.isFavorite || isUserFavorite;
       _initializedFavorite = true;
     }
 
