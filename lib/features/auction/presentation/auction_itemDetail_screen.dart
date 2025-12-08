@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
+import 'dart:convert';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/services/firebase_service.dart';
@@ -20,6 +22,7 @@ class AuctionItemDetailScreen extends StatefulWidget {
 class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
   bool _isFavorite = false;
   bool _initializedFavorite = false; // 첫 build 때 한 번만 item.isFavorite 값을 state로 복사하기 위한 플래그
+  bool _loggedDebug = false; // 디테일 진입 시 character_info 포함한 전체 데이터 로깅 여부
 
   // 즐겨찾기 테스트용 인메모리 리포지토리 (factory InMemoryAuctionRepository() 사용)
   final InMemoryAuctionRepository _repo = InMemoryAuctionRepository();
@@ -45,6 +48,11 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
       (e) => e?.name == item.name,
       orElse: () => null,
     );
+
+    if (!_loggedDebug) {
+      _loggedDebug = true;
+      _logDetailDebugData(j, item, srcItem);
+    }
 
     return DefaultTabController(
       length: 2,
@@ -128,6 +136,47 @@ class _AuctionItemDetailScreenState extends State<AuctionItemDetailScreen> {
         ),
       ),
     );
+  }
+
+  void _logDetailDebugData(
+    Map<String, dynamic> rawArgs,
+    AuctionItem item,
+    src.AuctionItem? srcItem,
+  ) {
+    const encoder = JsonEncoder.withIndent('  ');
+
+    String _pretty(dynamic v) {
+      try {
+        return encoder.convert(v);
+      } catch (_) {
+        return v?.toString() ?? 'null';
+      }
+    }
+
+    void _logBlock(String title, String body) {
+      const chunkSize = 800; // debugPrint 길이 제한 방지
+      debugPrint('--- [AuctionDetail] $title ---');
+      for (var start = 0; start < body.length; start += chunkSize) {
+        final end =
+            (start + chunkSize < body.length) ? start + chunkSize : body.length;
+        debugPrint(body.substring(start, end));
+      }
+    }
+
+    _logBlock('raw arguments (ModalRoute.settings.arguments)', _pretty(rawArgs));
+
+    final characterInfo = rawArgs['character_info'];
+    _logBlock('character_info', _pretty(characterInfo));
+
+    _logBlock('AuctionItem parsed (toJson)', _pretty(item.toJson()));
+
+    if (srcItem != null) {
+      _logBlock(
+          'src fallback (auction_item_data.dart)', _pretty(srcItem.toJson()));
+    } else {
+      debugPrint(
+          '--- [AuctionDetail] src fallback (auction_item_data.dart) ---\n<null>');
+    }
   }
 
   Future<void> _toggleFavoriteForUser(AuctionItem item) async {

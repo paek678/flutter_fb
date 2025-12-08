@@ -706,8 +706,13 @@ class FirestoreService {
     // ───────────────────────────── stats / detail_stat ─────────────────────────────
     final basicStatDoc =
         await charRef.collection('basic_stat').doc('latest').get();
-    final detailStatDoc =
+    // detail_stat 컬렉션 명이 detail_stats로 저장된 경우가 있어 둘 다 시도
+    DocumentSnapshot<Map<String, dynamic>> detailStatDoc =
         await charRef.collection('detail_stat').doc('latest').get();
+    if (!detailStatDoc.exists) {
+      detailStatDoc =
+          await charRef.collection('detail_stats').doc('latest').get();
+    }
 
     CharacterStats stats = const CharacterStats.empty();
     if (basicStatDoc.exists) {
