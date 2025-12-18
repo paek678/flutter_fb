@@ -1,11 +1,27 @@
 // lib/features/board/presentation/board_list_screen.dart
 import 'package:flutter/material.dart';
+
 import '../model/notice.dart';
 import '../model/notice_category.dart';
 import '../repository/notice_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/services/firebase_service.dart';
+
+enum NoticeFilter { all, event, maintenance }
+
+extension NoticeFilterX on NoticeFilter {
+  NoticeCategory? get category => switch (this) {
+        NoticeFilter.all => null,
+        NoticeFilter.event => NoticeCategory.event,
+        NoticeFilter.maintenance => NoticeCategory.maintenance,
+      };
+
+  String get label => switch (this) {
+        NoticeFilter.all => '전체',
+        NoticeFilter.event => '이벤트',
+        NoticeFilter.maintenance => '점검',
+      };
+}
 
 class BoardListScreen extends StatefulWidget {
   const BoardListScreen({super.key});
@@ -15,60 +31,52 @@ class BoardListScreen extends StatefulWidget {
 }
 
 class _BoardListScreenState extends State<BoardListScreen> {
-  // 🔹 1. InMemoryNoticeRepository 대신 인터페이스 NoticeRepository 사용
-  // 실제 구현체는 FirestoreNoticeRepository로 인스턴스화
-  late final NoticeRepository _repo;
+  final NoticeRepository _repo = FirestoreNoticeRepository();
 
-  int _selectedFilter = 0; // 0: 전체, 1: 이벤트, 2: 점검
+  NoticeFilter _selectedFilter = NoticeFilter.all;
   List<Notice> _notices = [];
   bool _loading = true;
-
-  Notice? _selectedNotice; // 디테일에서 보여줄 선택된 공지
+  Notice? _selectedNotice;
 
   @override
   void initState() {
     super.initState();
-    // 🔹 2. FirestoreNoticeRepository로 인스턴스 교체
-    _repo = FirestoreNoticeRepository();
-    _loadForFilter(_selectedFilter);
+    _loadNotices();
   }
 
-  Future<void> _loadForFilter(int index) async {
+  Future<void> _loadNotices([NoticeFilter? filter]) async {
+    final nextFilter = filter ?? _selectedFilter;
     setState(() => _loading = true);
 
-    NoticeCategory? category;
-    switch (index) {
-      case 1:
-        category = NoticeCategory.event;
-        break;
-      case 2:
-        category = NoticeCategory.maintenance;
-        break;
-      case 0:
-      default:
-        category = null; // 전체
-    }
-
-    // Firestore에서 데이터를 불러옵니다.
-    final data = await _repo.fetchNotices(
-      category: category,
-      onlyPinned: false,
-      query: '',
-    );
+    final data = await _repo.fetchNotices(category: nextFilter.category);
 
     if (!mounted) return;
     setState(() {
+      _selectedFilter = nextFilter;
       _notices = data;
       _loading = false;
-      _selectedNotice = null; // 필터 바꾸면 상세에서 다시 리스트로
+      _selectedNotice = null;
     });
+  }
+
+  void _openDetail(Notice notice) {
+    setState(() => _selectedNotice = notice);
+  }
+
+  Future<void> _openWrite() async {
+    final result = await Navigator.pushNamed(
+      context,
+      '/notice_write',
+      arguments: _repo,
+    );
+    if (result is Notice) {
+      await _loadNotices(_selectedFilter);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isDetail = _selectedNotice != null;
-    // 로그인 여부와 관계없이 버튼 노출
-    const bool canWrite = true;
+    final isDetail = _selectedNotice != null;
 
     return Stack(
       children: [
@@ -76,10 +84,9 @@ class _BoardListScreenState extends State<BoardListScreen> {
           children: [
             Expanded(
               child: Container(
-                // 🔹 리스트/디테일에 따라 margin 분기
                 margin: isDetail
-                    ? const EdgeInsets.fromLTRB(16, 16, 16, 0) // 디테일: 좌우 여백 O
-                    : const EdgeInsets.only(top: 16), // 리스트: 위만 여백
+                    ? const EdgeInsets.fromLTRB(16, 16, 16, 0)
+                    : const EdgeInsets.only(top: 16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
@@ -92,9 +99,7 @@ class _BoardListScreenState extends State<BoardListScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 리스트 모드일 때만 상단 제목 / 필터 / 헤더 노출
                     if (!isDetail) ...[
-                      // 상단 제목
                       Padding(
                         padding: const EdgeInsets.all(12),
                         child: Text(
@@ -104,58 +109,26 @@ class _BoardListScreenState extends State<BoardListScreen> {
                           ),
                         ),
                       ),
-
-                      // 필터 버튼 영역
-                      Container(
-                        width: double.infinity,
-                        color: const Color(0xFFF9FAFB),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _buildFilterPill(0, '전체'),
-                              const SizedBox(width: 8),
-                              _buildFilterPill(1, '이벤트'),
-                              const SizedBox(width: 8),
-                              _buildFilterPill(2, '점검'),
-                            ],
-                          ),
-                        ),
+                      _NoticeFilterBar(
+                        selected: _selectedFilter,
+                        onChanged: _loadNotices,
                       ),
-
-                      // 테이블 헤더
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 6,
-                        ),
-                        color: const Color(0xFFF7F7F7),
-                        child: Row(
-                          children: const [
-                            SizedBox(
-                              width: 72,
-                              child: Text('카테고리', style: _headerStyle),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Center(
-                                child: Text('제목', style: _headerStyle),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      const _NoticeHeader(),
                     ],
-
-                    // 리스트 / 디테일 토글 영역
                     Expanded(
-                      child: isDetail
-                          ? _buildDetailScreen(context, _selectedNotice!)
-                          : _buildNoticeList(context),
+                      child: isDetail && _selectedNotice != null
+                          ? _NoticeDetailView(
+                              notice: _selectedNotice!,
+                              onBack: () => setState(() {
+                                _selectedNotice = null;
+                              }),
+                            )
+                          : _NoticeListView(
+                              notices: _notices,
+                              loading: _loading,
+                              onRefresh: () => _loadNotices(_selectedFilter),
+                              onSelect: _openDetail,
+                            ),
                     ),
                   ],
                 ),
@@ -163,83 +136,67 @@ class _BoardListScreenState extends State<BoardListScreen> {
             ),
           ],
         ),
-
-        // 🔹 오른쪽 하단 "공지 작성" 버튼 (디테일에서는 감춤)
-        if (!isDetail && canWrite)
-          Positioned(right: 24, bottom: 24, child: _buildWriteButton(context)),
+        if (!isDetail)
+          Positioned(
+            right: 24,
+            bottom: 24,
+            child: _WriteButton(onTap: _openWrite),
+          ),
       ],
     );
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 공지 작성 버튼
+class _NoticeFilterBar extends StatelessWidget {
+  final NoticeFilter selected;
+  final ValueChanged<NoticeFilter> onChanged;
 
-  Widget _buildWriteButton(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ElevatedButton.icon(
-        onPressed: () async {
-          final result = await Navigator.pushNamed(
-            context,
-            '/notice_write',
-            arguments: _repo, // NoticeWriteScreen에서 repo 받도록 설계
-          );
+  const _NoticeFilterBar({
+    required this.selected,
+    required this.onChanged,
+  });
 
-          // 작성 후 돌아왔을 때 목록 갱신 (성공 시 Notice 돌려주는 구조 기준)
-          if (result is Notice) {
-            _loadForFilter(_selectedFilter);
-          }
-        },
-        icon: const Icon(Icons.edit, size: 18),
-        label: const Text('공지 작성'),
-        style: ButtonStyle(
-          padding: MaterialStateProperty.all(
-            const EdgeInsets.symmetric(horizontal: 16),
-          ),
-          backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
-            if (states.contains(MaterialState.disabled)) {
-              return AppColors.border; // Disabled
-            }
-            if (states.contains(MaterialState.pressed)) {
-              return AppColors.primaryText.withOpacity(0.9); // Pressed
-            }
-            if (states.contains(MaterialState.hovered)) {
-              return AppColors.secondaryText; // Hover
-            }
-            return AppColors.primaryText; // Default
-          }),
-          foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
-          shape: MaterialStateProperty.all(
-            const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(999)),
-            ),
-          ),
-          textStyle: MaterialStateProperty.all(
-            AppTextStyles.body2.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          elevation: MaterialStateProperty.all(0),
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFF9FAFB),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final filter in NoticeFilter.values) ...[
+              _FilterPill(
+                filter: filter,
+                isSelected: filter == selected,
+                onTap: () => onChanged(filter),
+              ),
+              if (filter != NoticeFilter.values.last)
+                const SizedBox(width: 8),
+            ],
+          ],
         ),
       ),
     );
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 필터 버튼
+class _FilterPill extends StatelessWidget {
+  final NoticeFilter filter;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-  Widget _buildFilterPill(int index, String label) {
-    final isSelected = _selectedFilter == index;
+  const _FilterPill({
+    required this.filter,
+    required this.isSelected,
+    required this.onTap,
+  });
 
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        if (_selectedFilter == index) return;
-        setState(() {
-          _selectedFilter = index;
-        });
-        _loadForFilter(index);
-      },
+      onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -259,7 +216,7 @@ class _BoardListScreenState extends State<BoardListScreen> {
               : [],
         ),
         child: Text(
-          label,
+          filter.label,
           style: AppTextStyles.body2.copyWith(
             color: isSelected ? Colors.white : AppColors.primaryText,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
@@ -268,16 +225,52 @@ class _BoardListScreenState extends State<BoardListScreen> {
       ),
     );
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // 리스트 본문
+class _NoticeHeader extends StatelessWidget {
+  const _NoticeHeader();
 
-  Widget _buildNoticeList(BuildContext context) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+      color: const Color(0xFFF7F7F7),
+      child: Row(
+        children: const [
+          SizedBox(
+            width: 72,
+            child: Text('카테고리', style: _headerStyle),
+          ),
+          SizedBox(width: 8),
+          Expanded(
+            child: Center(
+              child: Text('제목', style: _headerStyle),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-    if (_notices.isEmpty) {
+class _NoticeListView extends StatelessWidget {
+  final List<Notice> notices;
+  final bool loading;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<Notice> onSelect;
+
+  const _NoticeListView({
+    required this.notices,
+    required this.loading,
+    required this.onRefresh,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+
+    if (notices.isEmpty) {
       return Center(
         child: Text(
           '공지사항이 없습니다.',
@@ -287,31 +280,37 @@ class _BoardListScreenState extends State<BoardListScreen> {
     }
 
     return RefreshIndicator(
-      // 🔹 당겨서 새로고침 시 현재 필터 기준으로 다시 불러오기
-      onRefresh: () => _loadForFilter(_selectedFilter),
-      color: AppColors.primaryText, // 인디케이터 색상 (디자인 맞춤)
-      backgroundColor: Colors.white, // 배경색 (카드 배경과 맞춤)
+      onRefresh: onRefresh,
+      color: AppColors.primaryText,
+      backgroundColor: Colors.white,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 6),
-        physics: const AlwaysScrollableScrollPhysics(), // 🔹 아이템 적어도 당길 수 있게
-        itemCount: _notices.length,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: notices.length,
         itemBuilder: (context, index) {
-          final n = _notices[index];
-          return _buildNoticeRow(context, n);
+          final notice = notices[index];
+          return _NoticeRow(
+            notice: notice,
+            onTap: () => onSelect(notice),
+          );
         },
         separatorBuilder: (_, __) =>
             Divider(height: 1, color: Colors.grey.shade200),
       ),
     );
   }
+}
 
-  Widget _buildNoticeRow(BuildContext context, Notice n) {
+class _NoticeRow extends StatelessWidget {
+  final Notice notice;
+  final VoidCallback onTap;
+
+  const _NoticeRow({required this.notice, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedNotice = n;
-        });
-      },
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: _rowHorizontalPadding,
@@ -320,11 +319,11 @@ class _BoardListScreenState extends State<BoardListScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(width: 72, child: _buildCategoryBadge(n)),
+            SizedBox(width: 72, child: _NoticeCategoryBadge(notice)),
             const SizedBox(width: _badgeContentGap),
             Expanded(
               child: Text(
-                n.title,
+                notice.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.body1.copyWith(
@@ -337,17 +336,21 @@ class _BoardListScreenState extends State<BoardListScreen> {
       ),
     );
   }
+}
 
-  Widget _buildCategoryBadge(Notice n) {
-    final NoticeCategory c =
-        n.category; // NoticeCategory? -> NoticeCategory로 수정
+class _NoticeCategoryBadge extends StatelessWidget {
+  final Notice notice;
+  const _NoticeCategoryBadge(this.notice);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = notice.category;
 
     String label = '공지';
     Color bg = const Color(0xFFE9F5EE);
     Color textColor = const Color(0xFF208C4E);
 
     switch (c) {
-      // c가 NoticeCategory 타입이므로, case null:은 제거해야 합니다.
       case NoticeCategory.event:
         label = '이벤트';
         bg = const Color(0xFFFFE2D2);
@@ -358,8 +361,8 @@ class _BoardListScreenState extends State<BoardListScreen> {
         bg = const Color(0xFFE3ECF5);
         textColor = const Color(0xFF344055);
         break;
-      case NoticeCategory.general: // general 케이스 명시 추가
-      default: // general이 아니거나 새로운 카테고리가 추가될 경우 대비
+      case NoticeCategory.general:
+      default:
         label = '공지';
         bg = const Color(0xFFD6EFE8);
         textColor = const Color(0xFF208C4E);
@@ -381,6 +384,16 @@ class _BoardListScreenState extends State<BoardListScreen> {
       ),
     );
   }
+}
+
+class _NoticeDetailView extends StatelessWidget {
+  final Notice notice;
+  final VoidCallback onBack;
+
+  const _NoticeDetailView({
+    required this.notice,
+    required this.onBack,
+  });
 
   String _fmtDate(DateTime d) {
     return '${d.year.toString().padLeft(4, '0')}-'
@@ -388,18 +401,15 @@ class _BoardListScreenState extends State<BoardListScreen> {
         '${d.day.toString().padLeft(2, '0')}';
   }
 
-  // ---------------------------------------------------------------------------
-  // 상세 화면
-
-  Widget _buildDetailScreen(BuildContext context, Notice n) {
-    final title = n.title;
-    final date = _fmtDate(n.createdAt);
-    final content = n.content;
+  @override
+  Widget build(BuildContext context) {
+    final title = notice.title;
+    final date = _fmtDate(notice.createdAt);
+    final content = notice.content;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 상단: 제목 + 배지 + 날짜
         Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -417,7 +427,7 @@ class _BoardListScreenState extends State<BoardListScreen> {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  _buildCategoryBadge(n),
+                  _NoticeCategoryBadge(notice),
                   const SizedBox(width: 8),
                   Text(
                     date,
@@ -430,10 +440,7 @@ class _BoardListScreenState extends State<BoardListScreen> {
             ],
           ),
         ),
-
         const Divider(height: 1, color: Color(0xFFEAEAEA)),
-
-        // 본문 스크롤 영역
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -446,37 +453,31 @@ class _BoardListScreenState extends State<BoardListScreen> {
             ),
           ),
         ),
-
         const Divider(height: 1, color: Color(0xFFEAEAEA)),
-
-        // 하단: 목록으로 이동 버튼
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: SizedBox(
             height: 48,
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _selectedNotice = null;
-                });
-              },
+              onPressed: onBack,
               style: ButtonStyle(
-                backgroundColor: MaterialStateProperty.resolveWith<Color>((
-                  states,
-                ) {
-                  if (states.contains(MaterialState.disabled)) {
-                    return AppColors.border; // Disabled
-                  }
-                  if (states.contains(MaterialState.pressed)) {
-                    return AppColors.primaryText.withOpacity(0.9); // Pressed
-                  }
-                  if (states.contains(MaterialState.hovered)) {
-                    return AppColors.secondaryText; // Hover
-                  }
-                  return AppColors.primaryText; // Default
-                }),
-                foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
+                backgroundColor: MaterialStateProperty.resolveWith<Color>(
+                  (states) {
+                    if (states.contains(MaterialState.disabled)) {
+                      return AppColors.border;
+                    }
+                    if (states.contains(MaterialState.pressed)) {
+                      return AppColors.primaryText.withOpacity(0.9);
+                    }
+                    if (states.contains(MaterialState.hovered)) {
+                      return AppColors.secondaryText;
+                    }
+                    return AppColors.primaryText;
+                  },
+                ),
+                foregroundColor:
+                    MaterialStateProperty.all<Color>(Colors.white),
                 shape: MaterialStateProperty.all(
                   RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -495,6 +496,53 @@ class _BoardListScreenState extends State<BoardListScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _WriteButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _WriteButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: const Icon(Icons.edit, size: 18),
+        label: const Text('공지 작성'),
+        style: ButtonStyle(
+          padding: MaterialStateProperty.all(
+            const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+            if (states.contains(MaterialState.disabled)) {
+              return AppColors.border;
+            }
+            if (states.contains(MaterialState.pressed)) {
+              return AppColors.primaryText.withOpacity(0.9);
+            }
+            if (states.contains(MaterialState.hovered)) {
+              return AppColors.secondaryText;
+            }
+            return AppColors.primaryText;
+          }),
+          foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
+          shape: MaterialStateProperty.all(
+            const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(999)),
+            ),
+          ),
+          textStyle: MaterialStateProperty.all(
+            AppTextStyles.body2.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          elevation: MaterialStateProperty.all(0),
+        ),
+      ),
     );
   }
 }

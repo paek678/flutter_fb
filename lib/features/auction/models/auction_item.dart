@@ -109,10 +109,14 @@ class AuctionItem {
             ? ItemPrice.fromJson(j['itemPrice'] as Map<String, dynamic>)
             : null,
         rarity: j['rarity'] as String?,
-        rarityCode: j['rarityCode'] != null
-            ? detail.RarityCode.values
-                .firstWhere((e) => e.name == j['rarityCode'])
-            : null,
+        rarityCode: (() {
+          final rarityCodeStr = j['rarityCode'] as String?;
+          if (rarityCodeStr == null) return null;
+          return detail.RarityCode.values.firstWhere(
+            (e) => e.name == rarityCodeStr,
+            orElse: () => detail.RarityCode.rare,
+          );
+        })(),
         type: j['type'] as String?,
         subType: j['subType'] as String?,
         levelLimit: j['levelLimit'] as int?,

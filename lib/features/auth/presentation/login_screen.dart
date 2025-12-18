@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_fb/core/services/firebase_service.dart';
 import 'package:flutter_fb/features/auth/model/app_user.dart';
@@ -35,23 +36,24 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _onLogin() {
-    Navigator.pushReplacementNamed(context, '/home');
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _continueAsGuest() {
+    Navigator.pushNamed(context, '/guest_login');
   }
 
   Future<void> _onGoogleLogin() async {
+    if (_isSigningIn) return;
+
     if (!Platform.isAndroid && !Platform.isIOS) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Google 로그인은 Android/iOS에서만 지원됩니다.'),
-        ),
-      );
+      _showSnack('Google 로그인은 Android/iOS에서만 지원됩니다.');
       return;
     }
 
     try {
-      if (_isSigningIn) return;
       setState(() => _isSigningIn = true);
 
       if (!_googleInitialized) {
@@ -93,10 +95,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
     } on GoogleSignInException catch (e, st) {
-      // ignore: avoid_print
-      print('[Google Login Error] $e\n$st');
+      debugPrint('[Google Login Error] $e\n$st');
 
-      if (!mounted) return;
       final message = switch (e.code) {
         GoogleSignInExceptionCode.canceled => 'Google 로그인이 취소되었습니다.',
         GoogleSignInExceptionCode.interrupted =>
@@ -105,19 +105,12 @@ class _LoginScreenState extends State<LoginScreen> {
           '이 기기에서 Google 로그인 UI를 사용할 수 없습니다.',
         _ => 'Google 로그인 오류: $e',
       };
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      _showSnack(message);
     } catch (e, st) {
-      // ignore: avoid_print
-      print('[Google Login Error] $e\n$st');
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google 로그인 오류: $e')),
-      );
+      debugPrint('[Google Login Error] $e\n$st');
+      _showSnack('Google 로그인 오류: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isSigningIn = false);
-      }
+      if (mounted) setState(() => _isSigningIn = false);
     }
   }
 
@@ -169,7 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               PrimaryButton(
                 text: '회원가입 없이 둘러보기',
-                onPressed: _onLogin,
+                onPressed: _continueAsGuest,
               ),
 
               const SizedBox(height: AppSpacing.md),
@@ -215,73 +208,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildDividerWithText(String text) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(height: 1, color: AppColors.border.withOpacity(0.6)),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          text,
-          style: AppTextStyles.caption.copyWith(color: AppColors.secondaryText),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(height: 1, color: AppColors.border.withOpacity(0.6)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAuthLinksRow(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _linkButton(
-          label: 'Sign up',
-          onPressed: () => Navigator.pushNamed(context, '/register'),
-        ),
-        _verticalDivider(),
-        _linkButton(
-          label: 'Find ID',
-          onPressed: () => Navigator.pushNamed(context, '/find_id'),
-        ),
-        _verticalDivider(),
-        _linkButton(
-          label: 'Find password',
-          onPressed: () => Navigator.pushNamed(context, '/find_password'),
-        ),
-      ],
-    );
-  }
-
-  Widget _linkButton({required String label, required VoidCallback onPressed}) {
-    return TextButton(
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        minimumSize: const Size(0, 0),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      onPressed: onPressed,
-      child: Text(
-        label,
-        style: AppTextStyles.caption.copyWith(
-          color: AppColors.primaryText,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  Widget _verticalDivider() {
-    return Container(
-      width: 1,
-      height: 14,
-      color: AppColors.secondaryText.withOpacity(0.4),
     );
   }
 }

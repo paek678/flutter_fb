@@ -3,9 +3,9 @@
 import '../../models/domain/character.dart';
 import '../../models/domain/ranking_row.dart';
 
+import '../../repository/character_repository.dart';
 import '../../repository/firebase_character_repository.dart';
 import '../../../../core/services/firebase_service.dart';
-// 추가: Firebase 연동용 import
 
 import '../widgets/page_ranking_row.dart';
 import '../widgets/page_character_search_input.dart';
@@ -16,7 +16,7 @@ class CharacterSearchTab extends StatefulWidget {
   final void Function(int)? onTabChange;
 
   /// 필요하면 부모 위젯에서 직접 레포지토리를 주입해서 사용할 수 있도록 함
-  final FirebaseCharacterRepository? repository;
+  final CharacterRepository? repository;
 
   /// 추가 옵션: 초기 검색어
   final String? initialQuery;
@@ -36,7 +36,8 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
     with AutomaticKeepAliveClientMixin {
   final TextEditingController _controller = TextEditingController();
   String _selectedServer = '전체';
-  bool _isSearching = false;
+  bool _showingResults = false;
+  bool _searchLoading = false;
 
   // 검색 결과
   List<Character> _searchResults = [];
@@ -47,12 +48,12 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
 
   TabController? _tabController;
 
-  late final FirebaseCharacterRepository _repository;
+  late final CharacterRepository _repository;
 
   @override
   bool get wantKeepAlive => false;
 
-  final List<String> _servers = const [
+  static const List<String> _servers = [
     '전체',
     '카인',
     '디레지에',
@@ -68,7 +69,6 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
   void initState() {
     super.initState();
 
-    // 기본 레포지토리는 InMemory가 아닌 Firebase 레포지토리 사용
     _repository = widget.repository ?? FirebaseCharacterRepository();
 
     // initialQuery가 있으면 검색창 기본값으로 세팅
@@ -102,7 +102,8 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
     if (_tabController!.index != myIndex) {
       if (mounted) {
         setState(() {
-          _isSearching = false;
+          _showingResults = false;
+          _searchLoading = false;
           _searchResults = [];
           _controller.clear();
         });
@@ -110,20 +111,21 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
     }
   }
 
+  String? _serverOrNull() => _selectedServer == '전체' ? null : _selectedServer;
+
   Future<void> _loadRanking() async {
     setState(() {
       _isRankingLoading = true;
     });
 
     try {
-      final server = _selectedServer == '전체' ? null : _selectedServer;
+      final server = _serverOrNull();
 
       // 1) ranking_entries 프리뷰에서 상위 3개
       List<RankingRow> rows =
           await _repository.fetchRankingPreview(server: server);
       rows = rows.take(3).toList();
 
-      // 2) 프리뷰가 비어 있으면 collectionGroup에서 상위 3개 fallback
       if (rows.isEmpty) {
         final fromAll = await FirestoreService.fetchAllRankingRows(
           serverId: server,
@@ -140,11 +142,12 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _rankingRows = [];
-        _isRankingLoading = false;
-      });
-      // 필요하면 스낵바 등으로 에러 메시지 출력
+      if (mounted) {
+        setState(() {
+          _rankingRows = [];
+          _isRankingLoading = false;
+        });
+      }
     }
   }
 
@@ -162,12 +165,13 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
     }
 
     setState(() {
-      _isSearching = true;
+      _showingResults = true;
+      _searchLoading = true;
       _searchResults = [];
     });
 
     try {
-      final server = _selectedServer == '전체' ? null : _selectedServer;
+      final server = _serverOrNull();
 
       final results = await _repository.searchCharacters(
         name: query,
@@ -177,13 +181,15 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
       if (!mounted) return;
       setState(() {
         _searchResults = results;
+        _searchLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _searchResults = [];
+        _searchLoading = false;
       });
-      // 에러 로그만 찍고, 필요하면 추가 예외 처리
+      // TODO: 필요 시 스낵바 등으로 안내
     }
   }
 
@@ -199,27 +205,30 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
     super.build(context);
 
     // 검색 결과 화면
-    if (_isSearching) {
+    if (_showingResults) {
       return Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Expanded(
-              child: CharacterSearchResult(
-                query: _controller.text,
-                results: _searchResults,
-                onCharacterSelected: (character) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CharacterDetailView(character: character),
+        child: _searchLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  Expanded(
+                    child: CharacterSearchResult(
+                      query: _controller.text,
+                      results: _searchResults,
+                      onCharacterSelected: (character) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                CharacterDetailView(character: character),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       );
     }
 

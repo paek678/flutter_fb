@@ -16,7 +16,6 @@ import '../features/community/presentation/community_detail_screen.dart';
 import '../features/community/model/community_post.dart';
 import '../features/community/repository/community_repository.dart';
 import '../features/auction/presentation/auction_favorite_screen.dart';
-import '../features/character/presentation/pages/top_app_bar_character_search_screen.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -50,12 +49,6 @@ class AppRouter {
       case '/auction_favorites':
         return MaterialPageRoute(
           builder: (_) => const AuctionFavoriteScreen(),
-          settings: settings,
-        );
-      case '/character_search':
-        final query = settings.arguments as String? ?? '';
-        return MaterialPageRoute(
-          builder: (_) => TopAppBarCharacterSearchScreen(query: query),
           settings: settings,
         );
       // 공지 작성

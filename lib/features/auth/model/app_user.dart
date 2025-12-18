@@ -1,15 +1,14 @@
-
 class AppUser {
-  final String uid;          // Firebase UID
-  final String? email;       // nullable
-  final String displayName;  // nickname / profile name
-  final String provider;     // login provider: "google", "password", ...
-  final String role;         // "user", "admin", ...
+  final String uid; // Firebase UID
+  final String? email;
+  final String displayName; // nickname / profile name
+  final String provider; // login provider: "google", "password", ...
+  final String role; // "user", "admin", ...
 
   final DateTime createdAt;
   final DateTime? lastLoginAt;
   final DateTime? lastActionAt;
-  final Set<int> favorites; // 찜한 auction item ids
+  final Set<int> favorites; // auction item ids
 
   const AppUser({
     required this.uid,
@@ -47,38 +46,28 @@ class AppUser {
     );
   }
 
-  factory AppUser.fromJson(Map<String, dynamic> json) {
-    DateTime parseDate(String key) {
-      final raw = json[key];
-      if (raw == null) return DateTime.now();
-      return DateTime.parse(raw as String);
-    }
+  factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
+        uid: json['uid'] as String,
+        email: json['email'] as String?,
+        displayName: json['displayName'] as String? ?? 'User',
+        provider: json['provider'] as String? ?? 'unknown',
+        role: json['role'] as String? ?? 'user',
+        createdAt: _parseDate(json['createdAt']) ?? DateTime.now(),
+        lastLoginAt: _parseDate(json['lastLoginAt']),
+        lastActionAt: _parseDate(json['lastActionAt']),
+        favorites: _parseFavorites(json['favorites']),
+      );
 
-    DateTime? parseDateOrNull(String key) {
-      final raw = json[key];
-      if (raw == null) return null;
-      return DateTime.tryParse(raw as String);
-    }
-
-    return AppUser(
-      uid: json['uid'] as String,
-      email: json['email'] as String?,
-      displayName: json['displayName'] as String? ?? 'User',
-      provider: json['provider'] as String? ?? 'unknown',
-      role: json['role'] as String? ?? 'user',
-      createdAt: parseDate('createdAt'),
-      lastLoginAt: parseDateOrNull('lastLoginAt'),
-      lastActionAt: parseDateOrNull('lastActionAt'),
-      favorites: _parseFavorites(json['favorites']),
-    );
+  static DateTime? _parseDate(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is DateTime) return raw;
+    if (raw is String) return DateTime.tryParse(raw);
+    return null;
   }
 
   static Set<int> _parseFavorites(dynamic raw) {
     if (raw is List) {
-      return raw
-          .whereType<num>()
-          .map((e) => e.toInt())
-          .toSet();
+      return raw.whereType<num>().map((e) => e.toInt()).toSet();
     }
     return const <int>{};
   }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/job_data.dart';
@@ -8,19 +9,63 @@ import '../../widgets/server_selector.dart';
 import '../../../character/presentation/pages/character_detail_page.dart';
 import '../../../character/models/domain/character.dart';
 import '../../../character/models/domain/ranking_row.dart';
-import '../../../../core/services/firebase_service.dart';
+import '../../repository/ranking_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 
+enum DfServer { all, cain, diregie, siroco, prey, casyas, hilder, anton, bakal }
+
+extension DfServerX on DfServer {
+  String get label => switch (this) {
+        DfServer.all => '전체',
+        DfServer.cain => '카인',
+        DfServer.diregie => '디레지에',
+        DfServer.siroco => '시로코',
+        DfServer.prey => '프레이',
+        DfServer.casyas => '카시야스',
+        DfServer.hilder => '힐더',
+        DfServer.anton => '안톤',
+        DfServer.bakal => '바칼',
+      };
+
+  String? get id => switch (this) {
+        DfServer.all => null,
+        DfServer.cain => 'cain',
+        DfServer.diregie => 'diregie',
+        DfServer.siroco => 'siroco',
+        DfServer.prey => 'prey',
+        DfServer.casyas => 'casyas',
+        DfServer.hilder => 'hilder',
+        DfServer.anton => 'anton',
+        DfServer.bakal => 'bakal',
+      };
+}
+
+DfServer serverFromLabel(String label) {
+  return DfServer.values.firstWhere(
+    (s) => s.label == label,
+    orElse: () => DfServer.all,
+  );
+}
+
+String serverLabelFromId(String id) {
+  return DfServer.values
+      .firstWhere((s) => s.id == id, orElse: () => DfServer.all)
+      .label;
+}
+
 class RankingScreen extends StatefulWidget {
-  const RankingScreen({super.key});
+  final RankingRepository? repository;
+  const RankingScreen({super.key, this.repository});
 
   @override
   State<RankingScreen> createState() => _RankingScreenState();
 }
 
 class _RankingScreenState extends State<RankingScreen> {
-  String _selectedServer = '전체';
+  late final RankingRepository _repo;
+
+  DfServer _selectedServer = DfServer.all;
   String? _selectedJob;
   String? _selectedAwakening;
 
@@ -28,21 +73,13 @@ class _RankingScreenState extends State<RankingScreen> {
   String? _error;
   List<RankingRow> _rankingRows = [];
 
-  final List<String> _servers = [
-    '전체',
-    '카인',
-    '디레지에',
-    '시로코',
-    '프레이',
-    '카시야스',
-    '힐더',
-    '안톤',
-    '바칼',
-  ];
+  List<String> get _serverLabels =>
+      DfServer.values.map((e) => e.label).toList(growable: false);
 
   @override
   void initState() {
     super.initState();
+    _repo = widget.repository ?? const FirestoreRankingRepository();
     _fetchRankingRows();
   }
 
@@ -53,22 +90,19 @@ class _RankingScreenState extends State<RankingScreen> {
     });
 
     try {
-      final rows = await FirestoreService.fetchAllRankingRows(
-        serverId: _serverIdFromName(_selectedServer),
-      );
+      final rows = await _repo.fetchRankingRows(serverId: _selectedServer.id);
       final sortedByFame = List<RankingRow>.from(rows)
         ..sort((a, b) => b.fame.compareTo(a.fame));
       final ranked = List<RankingRow>.generate(
         sortedByFame.length,
         (i) => sortedByFame[i].copyWith(rank: i + 1),
       );
-      // Debug: incoming ranking rows snapshot (전체 출력)
-      debugPrint('[RankingScreen] fetched ${ranked.length} rows (server=$_selectedServer)');
-      for (final row in ranked) {
+
+      if (kDebugMode) {
         debugPrint(
-          ' - #${row.rank} ${row.name} / ${row.jobGrowName} / ${row.serverId} fame=${row.fame} level=${row.level} image=${row.imagePath}',
-        );
+            '[RankingScreen] fetched ${ranked.length} rows (server=${_selectedServer.label})');
       }
+
       if (!mounted) return;
       setState(() {
         _rankingRows = ranked;
@@ -95,10 +129,10 @@ class _RankingScreenState extends State<RankingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ServerSelector(
-              servers: _servers,
-              selectedServer: _selectedServer,
+              servers: _serverLabels,
+              selectedServer: _selectedServer.label,
               onServerSelected: (server) {
-                setState(() => _selectedServer = server);
+                setState(() => _selectedServer = serverFromLabel(server));
                 _fetchRankingRows();
               },
             ),
@@ -130,8 +164,7 @@ class _RankingScreenState extends State<RankingScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // 선택된 서버/직업/각성에 맞춰 필터링 (선택 안 하면 전체 표시)
-    final selectedServerId = _serverIdFromName(_selectedServer);
+    final selectedServerId = _selectedServer.id;
     final filteredRows = _rankingRows.where((row) {
       if (selectedServerId != null && row.serverId != selectedServerId) {
         return false;
@@ -168,10 +201,10 @@ class _RankingScreenState extends State<RankingScreen> {
     final rankingData = List.generate(filteredRows.length, (i) {
       final row = filteredRows[i];
       return {
-        'rank': i + 1, // 화면에는 순차 번호로 표시
+        'rank': i + 1,
         'name': row.name,
         'class': row.jobGrowName.isNotEmpty ? row.jobGrowName : row.job,
-        'server': _serverNameFromId(row.serverId),
+        'server': serverLabelFromId(row.serverId),
         'serverId': row.serverId,
         'level': row.level,
         'power': row.fame.toString(),
@@ -188,11 +221,9 @@ class _RankingScreenState extends State<RankingScreen> {
       awakening: _selectedAwakening ?? '전체',
       rankingData: rankingData,
       onTapCharacter: (characterMap) {
-        debugPrint('[RankingScreen] onTapCharacter raw=$characterMap');
         final fameRaw = characterMap['power'] ?? characterMap['score'] ?? '0';
         final fame = int.tryParse('$fameRaw') ?? 0;
 
-        // 랭킹 → 상세: 서버 코드 접두사를 항상 붙여 전달
         final serverId = characterMap['serverId'] as String? ?? '';
         String characterId = characterMap['characterId'] as String? ??
             characterMap['id'] as String? ??
@@ -214,10 +245,6 @@ class _RankingScreenState extends State<RankingScreen> {
           fame: fame,
         );
 
-        debugPrint(
-          '[RankingScreen] onTapCharacter -> Character(id=${character.id}, name=${character.name}, server=${character.server}, job=${character.job}, fame=${character.fame}, level=${character.level})',
-        );
-
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -231,46 +258,12 @@ class _RankingScreenState extends State<RankingScreen> {
 
   void _onJobSelected(String job) {
     setState(() {
-      // "전체" 선택 시 필터 해제
       _selectedJob = job == '전체' ? null : job;
       _selectedAwakening = null;
     });
   }
 
   void _onAwakeningSelected(String aw) {
-    // "전체" 선택 시 필터 해제
     setState(() => _selectedAwakening = aw == '전체' ? null : aw);
-  }
-
-  String? _serverIdFromName(String name) {
-    if (name == '전체') return null;
-
-    const map = <String, String>{
-      '카인': 'cain',
-      '디레지에': 'diregie',
-      '시로코': 'siroco',
-      '프레이': 'prey',
-      '카시야스': 'casyas',
-      '힐더': 'hilder',
-      '안톤': 'anton',
-      '바칼': 'bakal',
-    };
-
-    return map[name];
-  }
-
-  String _serverNameFromId(String id) {
-    const map = <String, String>{
-      'cain': '카인',
-      'diregie': '디레지에',
-      'siroco': '시로코',
-      'prey': '프레이',
-      'casyas': '카시야스',
-      'hilder': '힐더',
-      'anton': '안톤',
-      'bakal': '바칼',
-    };
-    if (id.isEmpty) return '';
-    return map[id] ?? id;
   }
 }

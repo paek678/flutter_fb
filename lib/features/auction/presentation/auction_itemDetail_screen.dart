@@ -729,7 +729,7 @@ class _OptionList extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '• ',
+                        '- ',
                         style: TextStyle(color: AppColors.secondaryText),
                       ),
                       Expanded(

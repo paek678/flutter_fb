@@ -8,7 +8,6 @@ class GuestLoginScreen extends StatelessWidget {
   const GuestLoginScreen({super.key});
 
   void _onContinueAsGuest(BuildContext context) {
-    // TODO: 필요하면 guest 플래그 저장
     Navigator.pushReplacementNamed(context, '/home');
   }
 
@@ -19,7 +18,7 @@ class GuestLoginScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
-        automaticallyImplyLeading: false, // 👈 이거 추가
+        automaticallyImplyLeading: false,
         iconTheme: const IconThemeData(color: AppColors.primaryText),
         title: Text(
           '게스트 로그인',
@@ -30,7 +29,7 @@ class GuestLoginScreen extends StatelessWidget {
         ),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16), // 네가 요즘 좋아하는 16 고정
+        padding: const EdgeInsets.all(16),
         child: Center(
           child: Container(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -65,7 +64,6 @@ class GuestLoginScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
 
-                // 게스트로 계속하기
                 SizedBox(
                   width: double.infinity,
                   height: 44,
@@ -76,7 +74,6 @@ class GuestLoginScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
 
-                // 취소
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: Text(

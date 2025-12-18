@@ -1,5 +1,6 @@
 // lib/core/services/firebase_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_fb/features/character/models/ui/detail_stat.dart';
 
 import 'firestore_mappers.dart';
@@ -171,10 +172,10 @@ class FirestoreService {
 
       return communityPostsFromQuerySnapshot(snap);
     } on FirebaseException catch (e, st) {
-      print(
+      debugPrint(
         '[fetchAllCommunityPosts] FirebaseException: ${e.code} / ${e.message}',
       );
-      print(st);
+      debugPrint('$st');
       rethrow;
     }
   }

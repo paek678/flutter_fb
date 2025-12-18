@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_fb/features/home/presentation/widgets/bottom_nav_bar.dart';
 import 'package:flutter_fb/features/home/presentation/widgets/top_app_bar.dart';
 import 'package:flutter_fb/features/home/presentation/widgets/tab_bar.dart';
@@ -16,7 +16,7 @@ class BaseScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16.0), // ✅ 모든 탭에 동일 패딩 적용
+      padding: const EdgeInsets.all(16.0),
       child: child,
     );
   }
@@ -32,11 +32,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _bottomIndex = 1;
 
+  static final List<Widget> _tabs = <Widget>[
+    const SizedBox.shrink(), // CharacterSearchTab placeholder
+    const BaseScreen(child: RankingScreen()),
+    const AuctionScreen(),
+    const CommunityListScreen(),
+    const BoardListScreen(),
+  ];
+
   void _handleBottomTab(BuildContext context, int index) {
     setState(() => _bottomIndex = index);
 
     if (index == 1) {
-      // Home 탭과 동일한 첫 번째 TabBar 탭으로 이동
       DefaultTabController.of(context)?.animateTo(0);
     } else if (index == 2) {
       Navigator.pushNamed(context, '/settings');
@@ -57,20 +64,13 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  // 🔥 여기: CharacterSearchTab은 BaseScreen 안 씌운다
                   Builder(
                     builder: (innerContext) => CharacterSearchTab(
-                      onTabChange: (index) {
-                        DefaultTabController.of(innerContext)?.animateTo(index);
-                      },
+                      onTabChange: (index) =>
+                          DefaultTabController.of(innerContext)?.animateTo(index),
                     ),
                   ),
-
-                  // 나머지 탭은 그대로 BaseScreen 써도 됨
-                  const BaseScreen(child: RankingScreen()),
-                  const AuctionScreen(),
-                  const CommunityListScreen(),
-                  const BoardListScreen(),
+                  ..._tabs.skip(1),
                 ],
               ),
             ),
