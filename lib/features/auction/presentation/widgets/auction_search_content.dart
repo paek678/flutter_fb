@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/firebase_service.dart';
 import '../../models/auction_item.dart';
 import '../../repository/auction_repository.dart';
 import 'auction_item_tile.dart';
@@ -38,14 +39,61 @@ class _AuctionSearchContentState extends State<AuctionSearchContent> {
     final items = await _repo.fetchItems(query: widget.query);
     if (!mounted) return;
     setState(() {
-      _results = items;
+      _results = _mergeWithUserFavorites(items);
       _loading = false;
     });
   }
 
+  List<AuctionItem> _mergeWithUserFavorites(List<AuctionItem> items) {
+    final favorites = FirestoreService.currentUser?.favorites;
+    if (favorites == null || favorites.isEmpty) return items;
+    return items.map((item) {
+      final isUserFavorite = favorites.contains(item.id);
+      if (isUserFavorite == item.isFavorite) return item;
+      return item.copyWith(isFavorite: item.isFavorite || isUserFavorite);
+    }).toList(growable: false);
+  }
+
+  Future<bool> _updateUserFavorite(int itemId) async {
+    final current = FirestoreService.currentUser;
+    if (current == null) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 후 즐겨찾기를 사용할 수 있습니다.')),
+      );
+      return false;
+    }
+
+    final updatedFavorites = Set<int>.from(current.favorites);
+    final wasFavorite = updatedFavorites.contains(itemId);
+    if (wasFavorite) {
+      updatedFavorites.remove(itemId);
+    } else {
+      updatedFavorites.add(itemId);
+    }
+
+    final updatedUser = current.copyWith(
+      favorites: updatedFavorites,
+      lastActionAt: DateTime.now(),
+    );
+
+    await FirestoreService.updateUser(updatedUser);
+    FirestoreService.setCurrentUser(updatedUser);
+    return true;
+  }
+
   Future<void> _toggleFavorite(AuctionItem item) async {
-    await _repo.toggleFavorite(item.id);
-    await _load();
+    try {
+      final ok = await _updateUserFavorite(item.id);
+      if (!ok) return;
+      await _repo.toggleFavorite(item.id);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('즐겨찾기 업데이트 실패: $e')),
+      );
+    }
   }
 
   void _openDetail(AuctionItem item) {

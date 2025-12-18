@@ -12,7 +12,12 @@
           "package_name": "com.example.firebasedb"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBCbHgLyqhluTcv8hqSfihYAUIJQG0jUs8"
@@ -20,7 +25,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "800134555306-0025cqoknvukimae4krfh80b95rfsiic.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.flutterFb"
+              }
+            }
+          ]
         }
       }
     },
@@ -31,7 +48,20 @@
           "package_name": "com.example.flutter_fb"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "800134555306-4fcjbck9ms1c997g7evd0aj7uuevulvn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.flutter_fb",
+            "certificate_hash": "984464b2363adc2e7c6c1e4b4f1e331f9c978cc8"
+          }
+        },
+        {
+          "client_id": "800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBCbHgLyqhluTcv8hqSfihYAUIJQG0jUs8"
@@ -39,7 +69,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "800134555306-0025cqoknvukimae4krfh80b95rfsiic.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.flutterFb"
+              }
+            }
+          ]
         }
       }
     }
