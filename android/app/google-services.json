@@ -50,11 +50,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "800134555306-4fcjbck9ms1c997g7evd0aj7uuevulvn.apps.googleusercontent.com",
+          "client_id": "800134555306-qss9visr2cbacmj9v3a9hun0jp4l18j0.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.example.flutter_fb",
-            "certificate_hash": "984464b2363adc2e7c6c1e4b4f1e331f9c978cc8"
+            "certificate_hash": "d44845b2bffb3a56c828bef600e17491234cb3c5"
           }
         },
         {

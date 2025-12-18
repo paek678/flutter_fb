@@ -4,15 +4,16 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
+    <!-- Enable Credential Manager / Play Services credentials so GoogleSignIn.authenticate() can show UI -->
     <meta-data
         android:name="com.google.android.gms.credentials.API_ENABLED"
-        android:value="false" />
+        android:value="true" />
     <meta-data
         android:name="com.google.android.gms.credentials.CredentialPickerConfig"
-        android:value="false" />
+        android:value="true" />
     <meta-data
         android:name="androidx.credentials.CREDENTIAL_SERVICE_ENABLED"
-        android:value="false" />
+        android:value="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
