@@ -5,11 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_fb/core/services/firebase_service.dart';
 import 'package:flutter_fb/features/auth/model/app_user.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/widgets/custom_text_field.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/widgets/custom_text_field.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,6 +22,11 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _isSigningIn = false;
+  static bool _googleInitialized = false;
+
+  static const String _webClientId =
+      '800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com';
 
   @override
   void dispose() {
@@ -30,101 +36,119 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _onLogin() {
-    // TODO: 실제 로그인 연동
     Navigator.pushReplacementNamed(context, '/home');
   }
 
-  static const String _webClientId =
-      '800134555306-orq1jhqs4l8qim0vmo20tovkagovs5ld.apps.googleusercontent.com';
-
   Future<void> _onGoogleLogin() async {
-    // 데스크톱 / Web 에서 호출되는 건 막기 (선택 사항)
     if (!Platform.isAndroid && !Platform.isIOS) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google 로그인은 모바일(Android/iOS)에서만 지원됩니다.')),
+        const SnackBar(
+          content: Text('Google 로그인은 Android/iOS에서만 지원됩니다.'),
+        ),
       );
       return;
     }
 
     try {
-      // 0) serverClientId 로 GoogleSignIn 초기화 (최신 버전에서 권장)
-      await GoogleSignIn.instance.initialize(serverClientId: _webClientId);
+      if (_isSigningIn) return;
+      setState(() => _isSigningIn = true);
 
-      // 1) Google Sign-In 플로우 시작
-      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance
-          .authenticate();
+      if (!_googleInitialized) {
+        await GoogleSignIn.instance.initialize(serverClientId: _webClientId);
+        _googleInitialized = true;
+      }
 
-      if (googleUser == null) {
+      // Already signed in with FirebaseAuth -> reuse session
+      final existingAuthUser = FirebaseAuth.instance.currentUser;
+      if (existingAuthUser != null) {
+        await _persistUser(existingAuthUser);
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Google 로그인 취소됨')));
+        Navigator.pushReplacementNamed(context, '/home');
         return;
       }
 
-      // 2) 토큰 가져오기 (여기서는 authentication 에서 idToken만 사용)
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAccount googleUser =
+          await GoogleSignIn.instance.authenticate();
+
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+      if (googleAuth.idToken == null) {
+        throw Exception('Google 로그인 실패: idToken이 null 입니다.');
+      }
 
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
-        // accessToken은 Firebase 로그인만 할 거면 굳이 필요 없음
       );
 
-      // 3) Firebase Auth 로그인
-      final UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithCredential(credential);
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
 
       final User? user = userCredential.user;
       if (user == null) {
         throw Exception('Firebase 로그인 실패: user == null');
       }
 
-      final String uid = user.uid;
-      final now = DateTime.now();
-
-      // 4) Firestore users 컬렉션에서 uid로 조회
-      final existing = await FirestoreService.getUserByUid(uid);
-
-      if (existing == null) {
-        // 새 유저 문서 생성
-        final newUser = AppUser(
-          uid: uid,
-          email: user.email,
-          displayName: user.displayName ?? 'User',
-          provider: 'google',
-          role: 'user',
-          createdAt: now,
-          lastLoginAt: now,
-          lastActionAt: now,
-        );
-        await FirestoreService.createUser(newUser);
-        FirestoreService.setCurrentUser(newUser);
-      } else {
-        // 기존 유저면 마지막 로그인 시간만 갱신
-        final updated = existing.copyWith(lastLoginAt: now);
-        await FirestoreService.updateUser(updated);
-        FirestoreService.setCurrentUser(updated);
-      }
+      await _persistUser(user);
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
-    } catch (e, st) {
-      // 디버깅용 로그
+    } on GoogleSignInException catch (e, st) {
       // ignore: avoid_print
       print('[Google Login Error] $e\n$st');
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Google 로그인 중 오류 발생: $e')));
+      final message = switch (e.code) {
+        GoogleSignInExceptionCode.canceled => 'Google 로그인이 취소되었습니다.',
+        GoogleSignInExceptionCode.interrupted =>
+          'Google 로그인이 중단되었습니다.',
+        GoogleSignInExceptionCode.uiUnavailable =>
+          '이 기기에서 Google 로그인 UI를 사용할 수 없습니다.',
+        _ => 'Google 로그인 오류: $e',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (e, st) {
+      // ignore: avoid_print
+      print('[Google Login Error] $e\n$st');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google 로그인 오류: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSigningIn = false);
+      }
     }
   }
 
   void _onGuestLogin() {
-    // 🔹 게스트 팝업 화면으로 이동 (현재 /home 말고 /guest_login 으로 감)
     Navigator.pushNamed(context, '/guest_login');
+  }
+
+  Future<void> _persistUser(User user) async {
+    final String uid = user.uid;
+    final now = DateTime.now();
+
+    final existing = await FirestoreService.getUserByUid(uid);
+
+    if (existing == null) {
+      final newUser = AppUser(
+        uid: uid,
+        email: user.email,
+        displayName: user.displayName ?? 'User',
+        provider: 'google',
+        role: 'user',
+        createdAt: now,
+        lastLoginAt: now,
+        lastActionAt: now,
+      );
+      await FirestoreService.createUser(newUser);
+      FirestoreService.setCurrentUser(newUser);
+    } else {
+      final updated = existing.copyWith(lastLoginAt: now);
+      await FirestoreService.updateUser(updated);
+      FirestoreService.setCurrentUser(updated);
+    }
   }
 
   @override
@@ -140,18 +164,16 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 로고 / 타이틀
               Image.asset('assets/images/logo_done_big.png', height: 180),
               const SizedBox(height: 64),
 
-              // 기본 로그인 버튼
-              PrimaryButton(text: '회원가입 없이 둘러보기', onPressed: _onLogin),
+              PrimaryButton(
+                text: '회원가입 없이 둘러보기',
+                onPressed: _onLogin,
+              ),
 
-              // // 구분선 "또는"
-              // _buildDividerWithText('또는'),
               const SizedBox(height: AppSpacing.md),
 
-              // Google 로그인 버튼 (흰 배경, 로고 + 텍스트)
               SizedBox(
                 height: 48,
                 child: OutlinedButton(
@@ -165,13 +187,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed: _onGoogleLogin,
+                  onPressed: _isSigningIn ? null : _onGoogleLogin,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // 실제론 assets에 구글 아이콘 하나 넣어라.
-                      // 예: assets/images/google_logo.png 등록 후 아래 사용
                       Image.asset(
                         'assets/images/google_logo.png',
                         width: 18,
@@ -191,8 +211,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
 
               const SizedBox(height: AppSpacing.lg),
-
-              // 게스트 로그인
             ],
           ),
         ),
@@ -224,17 +242,17 @@ class _LoginScreenState extends State<LoginScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _linkButton(
-          label: '회원가입',
+          label: 'Sign up',
           onPressed: () => Navigator.pushNamed(context, '/register'),
         ),
         _verticalDivider(),
         _linkButton(
-          label: 'ID 찾기',
+          label: 'Find ID',
           onPressed: () => Navigator.pushNamed(context, '/find_id'),
         ),
         _verticalDivider(),
         _linkButton(
-          label: '비밀번호 찾기',
+          label: 'Find password',
           onPressed: () => Navigator.pushNamed(context, '/find_password'),
         ),
       ],
