@@ -110,7 +110,10 @@ class RankingTableContainer extends StatelessWidget {
 
           // 데이터 리스트
           Column(
-            children: rows.map((row) {
+            children: rows.asMap().entries.map((entry) {
+              final index = entry.key;
+              final row = entry.value;
+              final displayRank = index + 1;
               return Column(
                 children: [
                   // ⭐ 변경: 전체 행을 InkWell로 감싸서 탭 가능하게
@@ -129,7 +132,7 @@ class RankingTableContainer extends StatelessWidget {
                           SizedBox(
                             width: 20,
                             height: 24,
-                            child: _RankBadge(rank: row.rank),
+                            child: _RankBadge(rank: displayRank),
                           ),
                           const SizedBox(width: 4),
                           Expanded(

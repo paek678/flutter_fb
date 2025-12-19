@@ -8,7 +8,6 @@ class CustomContainerWithSubtitle extends StatelessWidget {
   final Widget? subtitle; // 헤더 아래 소제목 (회색 배경 영역)
   final List<Widget> children;
   final EdgeInsetsGeometry? padding;
-
   const CustomContainerWithSubtitle({
     super.key,
     this.header,

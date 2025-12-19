@@ -97,10 +97,10 @@ class RankingList extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                _buildCharacterImage(
-                                  character['image'] as String?,
-                                  size: 16,
-                                ),
+                                    _buildCharacterImage(
+                                      character['image'] as String?,
+                                      size: 16,
+                                    ),
                                     const SizedBox(width: 4),
                                     Text(
                                       character['power'] ?? '-',

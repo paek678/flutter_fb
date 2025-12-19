@@ -113,6 +113,11 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
 
   String? _serverOrNull() => _selectedServer == '전체' ? null : _selectedServer;
 
+  String _todayRankingTitle() {
+    final now = DateTime.now();
+    return '${now.month}월 ${now.day}일 기준';
+  }
+
   Future<void> _loadRanking() async {
     setState(() {
       _isRankingLoading = true;
@@ -256,7 +261,7 @@ class _CharacterSearchTabState extends State<CharacterSearchTab>
               _isRankingLoading
                   ? const Center(child: CircularProgressIndicator())
                   : RankingTableContainer(
-                      titleDate: '11월 9일 기준',
+                      titleDate: _todayRankingTitle(),
                       serverName: _selectedServer,
                       rows: _rankingRows,
                       onMoreTap: () {
